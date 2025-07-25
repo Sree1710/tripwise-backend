@@ -1,0 +1,90 @@
+{
+    "Eravikulam National Park": {
+        "avg_time": 3,
+        "estimated_cost": 420
+    },
+    "Tea Museum": {
+        "avg_time": 2,
+        "estimated_cost": 150
+    },
+    "Mattupetty Dam": {
+        "avg_time": 1.5,
+        "estimated_cost": 50
+    },
+    "Top Station Viewpoint": {
+        "avg_time": 2.5,
+        "estimated_cost": 100
+    },
+    "Kundala Lake": {
+        "avg_time": 1,
+        "estimated_cost": 200
+    },
+    "Fort Kochi": {
+        "avg_time": 3.5,
+        "estimated_cost": 0
+    },
+    "Mattancherry Palace": {
+        "avg_time": 1.5,
+        "estimated_cost": 100
+    },
+    "Chinese Fishing Nets": {
+        "avg_time": 0.5,
+        "estimated_cost": 0
+    },
+    "Paradesi Synagogue": {
+        "avg_time": 0.5,
+        "estimated_cost": 10
+    },
+    "Alleppey Backwaters Houseboat": {
+        "avg_time": 6,
+        "estimated_cost": 8000
+    },
+    "Marari Beach": {
+        "avg_time": 2.5,
+        "estimated_cost": 0
+    },
+    "Alappuzha Beach": {
+        "avg_time": 1.5,
+        "estimated_cost": 0
+    },
+    "Periyar National Park": {
+        "avg_time": 3.5,
+        "estimated_cost": 550
+    },
+    "Thekkady Spice Plantation": {
+        "avg_time": 1.5,
+        "estimated_cost": 200
+    },
+    "Edakkal Caves": {
+        "avg_time": 2.5,
+        "estimated_cost": 50
+    },
+    "Chembra Peak": {
+        "avg_time": 4,
+        "estimated_cost": 750
+    },
+    "Kovalam Beach": {
+        "avg_time": 3,
+        "estimated_cost": 0
+    },
+    "Napier Museum": {
+        "avg_time": 2,
+        "estimated_cost": 100
+    },
+    "Padmanabhaswamy Temple": {
+        "avg_time": 1.5,
+        "estimated_cost": 0
+    },
+    "Jatayu Earth's Center": {
+        "avg_time": 3,
+        "estimated_cost": 450
+    },
+    "Poovar Island Boating": {
+        "avg_time": 2,
+        "estimated_cost": 1500
+    },
+    "Varkala Cliff": {
+        "avg_time": 2,
+        "estimated_cost": 0
+    }
+}
