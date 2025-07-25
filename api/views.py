@@ -5,172 +5,184 @@ from .utils.weather import get_weather
 from .ml.predict import predict_budget
 from .utils.db import get_hidden_spots
 import datetime
+import math
 
-def format_time(hour):
-    return datetime.time(hour=hour).strftime("%I:%M %p")
+# --- Helper Functions ---
+
+def estimate_internal_travel_time(loc1, loc2):
+    """
+    Estimates travel time between two lat/lng points.
+    This is a mock calculation assuming an average speed. A real app would use a Directions API.
+    """
+    lat1, lon1 = loc1['lat'], loc1['lng']
+    lat2, lon2 = loc2['lat'], loc2['lng']
+    distance = math.sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2)
+    travel_hours = distance * 1.5
+    return round(travel_hours, 2)
+
+def format_time_from_float(hour_float):
+    """Formats a float hour (e.g., 8.5) into a time string (e.g., "08:30 AM")."""
+    hours = int(hour_float)
+    minutes = int((hour_float * 60) % 60)
+    time_obj = datetime.time(hour=hours % 24, minute=minutes)
+    return time_obj.strftime("%I:%M %p")
 
 def get_priority_score(spot, interests):
+    """Scores a spot based on user interests."""
     return 1 if spot["type"] in interests else 0
+
 
 @api_view(['POST'])
 def generate_itinerary(request):
     data = request.data
     origin = data["starting_location"]
     destination = data["destination"]
-    duration = int(data["duration"])  # in days
+    duration = int(data["duration"])
     budget = int(data["budget"])
     interests = data.get("interests", [])
     travel_type = data.get("travel_type", "solo")
 
-    # Predict Budget
+    # 1. Predict Budget & Get Route
     predicted_budget = predict_budget({
-        "destination": destination,
-        "duration": duration,
-        "travel_type": travel_type,
-        "interest": interests[0] if interests else "general"
+        "destination": destination, "duration": duration,
+        "travel_type": travel_type, "interest": interests[0] if interests else "general"
     })
-
-    # Route Info
     route = get_route_info(origin, destination)
-    travel_time = route['duration_hours']
+    initial_travel_time = route['duration_hours']
 
-    # Get Spots
-    pois = get_places(route["route"], interests)
+    # 2. Get, De-duplicate, and Categorize Spots
+    pois = get_places(destination, interests)
     hidden = get_hidden_spots(destination, interests)
-    all_spots = pois + hidden
-
-    # Categorize
-    hotels = [s for s in all_spots if s["type"] == "hotel"]
-    restaurants = [s for s in all_spots if s["type"] == "restaurant"]
+    
+    all_spots_dict = {spot['name']: spot for spot in pois + hidden}
+    all_spots = list(all_spots_dict.values())
+    
+    hotels = sorted([s for s in all_spots if s["type"] == "hotel"], key=lambda x: x['estimated_cost'])
+    restaurants = sorted([s for s in all_spots if s["type"] == "restaurant"], key=lambda x: x['estimated_cost'])
     attractions = [s for s in all_spots if s["type"] not in ("hotel", "restaurant")]
 
-    # Prioritize Attractions
+    # 3. Reserve Budget for Hotel & Set up Alternatives
+    cost_accumulated = 0
+    hotel_cost_total = 0
+    chosen_hotel = None
+    alternative_hotels = []
+    
+    if hotels:
+        for hotel in hotels:
+            potential_cost = hotel["estimated_cost"] * (duration - 1 if duration > 1 else 1)
+            if chosen_hotel is None and potential_cost <= budget * 0.6:
+                chosen_hotel = hotel
+                hotel_cost_total = potential_cost
+                cost_accumulated += hotel_cost_total
+            else:
+                alternative_hotels.append(hotel)
+    
+    attraction_budget = budget - cost_accumulated
+    
+    # 4. Select Attractions & Set up Alternatives
     for spot in attractions:
         spot["priority_score"] = get_priority_score(spot, interests)
     sorted_attractions = sorted(attractions, key=lambda x: (x["priority_score"], -x["estimated_cost"]), reverse=True)
-
-    # Itinerary Plan
-    total_time_available = duration * 8
-    time_remaining = total_time_available - travel_time
-    cost_accumulated = 0
-    itinerary = []
-
-    # Add Attractions (within budget & time)
+    
+    daily_activity_hours = 8 
+    final_itinerary_spots = []
+    alternative_attractions = []
+    
+    temp_time = (duration * daily_activity_hours) - initial_travel_time
+    temp_budget = attraction_budget
     for spot in sorted_attractions:
-        if time_remaining < spot["avg_time"] or cost_accumulated + spot["estimated_cost"] > budget:
-            continue
-        spot_copy = spot.copy()
-        spot_copy["weather"] = get_weather(spot["location"])
-        itinerary.append(spot_copy)
-        time_remaining -= spot["avg_time"]
-        cost_accumulated += spot["estimated_cost"]
-
-    # Choose one hotel
-    hotel_spot = None
-    hotel_cost_total = 0
-    if hotels:
-        hotel_spot = hotels[0]
-        hotel_spot["weather"] = get_weather(hotel_spot["location"])
-        hotel_cost_total = hotel_spot["estimated_cost"] * (duration - 1)
-        if cost_accumulated + hotel_cost_total <= budget:
-            cost_accumulated += hotel_cost_total
+        if temp_time >= spot["avg_time"] and temp_budget >= spot["estimated_cost"]:
+            final_itinerary_spots.append(spot)
+            temp_time -= spot["avg_time"]
+            temp_budget -= spot["estimated_cost"]
+            cost_accumulated += spot["estimated_cost"]
         else:
-            hotel_spot = None
+            alternative_attractions.append(spot)
 
-    # Day-wise Itinerary Generation
-    day_wise_itinerary = {}
-    day = 1
-    current_hour = 8  # Start at 08:00 AM
-    max_activity_days = duration - 1
+    # 5. Build Day-wise Itinerary
+    day_wise_itinerary = {f"Day {i+1}": [] for i in range(duration)}
+    current_hour_float = 8.0
+    current_day = 1
+    
+    current_location = chosen_hotel['location'] if chosen_hotel else (final_itinerary_spots[0]['location'] if final_itinerary_spots else {"lat": 0, "lng": 0})
 
-    # Day 1 Travel
-    day_wise_itinerary[f"Day {day}"] = [{
-        "time": format_time(current_hour),
+    day_wise_itinerary[f"Day {current_day}"].append({
+        "time": format_time_from_float(current_hour_float),
         "activity": "Travel to destination",
-        "duration_hours": travel_time
-    }]
-    current_hour += int(travel_time)
-    time_used_today = travel_time
+        "duration_hours": initial_travel_time
+    })
+    current_hour_float += initial_travel_time
+    time_used_today = initial_travel_time
+    lunch_added_today = False
 
-    for spot in itinerary:
-        if day > max_activity_days:
-            break
-        # Move to next day if time exceeded
-        if time_used_today + spot["avg_time"] > 8:
-            # Add restaurant if time left
-            for rest in restaurants:
-                if time_used_today + rest["avg_time"] <= 8:
-                    rest_entry = {
-                        "name": rest["name"],
-                        "type": "restaurant",
-                        "duration_hours": rest["avg_time"],
-                        "weather": get_weather(rest["location"]),
-                        "time": format_time(current_hour)
-                    }
-                    day_wise_itinerary[f"Day {day}"].append(rest_entry)
-                    time_used_today += rest["avg_time"]
-                    current_hour += int(rest["avg_time"])
-                    break
+    for spot in final_itinerary_spots:
+        travel_to_next_spot = estimate_internal_travel_time(current_location, spot['location'])
+        
+        if not lunch_added_today and current_hour_float >= 12.5 and restaurants:
+            cheapest_restaurant = restaurants[0]
+            if attraction_budget >= cheapest_restaurant['estimated_cost']:
+                travel_to_lunch = estimate_internal_travel_time(current_location, cheapest_restaurant['location'])
+                if time_used_today + travel_to_lunch + cheapest_restaurant['avg_time'] <= daily_activity_hours:
+                    day_wise_itinerary[f"Day {current_day}"].append({"time": format_time_from_float(current_hour_float), "activity": f"Travel to {cheapest_restaurant['name']}", "duration_hours": travel_to_lunch})
+                    current_hour_float += travel_to_lunch
+                    time_used_today += travel_to_lunch
+                    day_wise_itinerary[f"Day {current_day}"].append({"time": format_time_from_float(current_hour_float), "activity": "Lunch Break", "name": cheapest_restaurant['name'], "duration_hours": cheapest_restaurant['avg_time']})
+                    current_hour_float += cheapest_restaurant['avg_time']
+                    time_used_today += cheapest_restaurant['avg_time']
+                    current_location = cheapest_restaurant['location']
+                    cost_accumulated += cheapest_restaurant['estimated_cost']
+                    attraction_budget -= cheapest_restaurant['estimated_cost']
+                    lunch_added_today = True
+                    travel_to_next_spot = estimate_internal_travel_time(current_location, spot['location'])
 
-            # Add hotel if possible
-            if hotel_spot and time_used_today + hotel_spot["avg_time"] <= 8:
-                hotel_entry = {
-                    "name": hotel_spot["name"],
-                    "type": "hotel",
-                    "duration_hours": hotel_spot["avg_time"],
-                    "weather": hotel_spot["weather"],
-                    "time": format_time(current_hour)
-                }
-                day_wise_itinerary[f"Day {day}"].append(hotel_entry)
-                time_used_today += hotel_spot["avg_time"]
-                current_hour += int(hotel_spot["avg_time"])
-
-            # Next day
-            day += 1
-            if day > max_activity_days:
-                break
-            day_wise_itinerary[f"Day {day}"] = []
+        if time_used_today + travel_to_next_spot + spot["avg_time"] > daily_activity_hours and current_day < duration:
+            current_day += 1
+            current_hour_float = 8.0
             time_used_today = 0
-            current_hour = 8
+            lunch_added_today = False
+            current_location = chosen_hotel['location'] if chosen_hotel else current_location
+            travel_to_next_spot = estimate_internal_travel_time(current_location, spot['location'])
 
-        # Add current attraction
-        entry = {
-            "name": spot["name"],
-            "type": spot["type"],
-            "duration_hours": spot["avg_time"],
-            "weather": spot["weather"],
-            "time": format_time(current_hour)
-        }
-        day_wise_itinerary[f"Day {day}"].append(entry)
-        time_used_today += spot["avg_time"]
-        current_hour += int(spot["avg_time"])
+        if current_day <= duration and time_used_today + travel_to_next_spot + spot["avg_time"] <= daily_activity_hours:
+            day_wise_itinerary[f"Day {current_day}"].append({"time": format_time_from_float(current_hour_float), "activity": f"Travel to {spot['name']}", "duration_hours": travel_to_next_spot})
+            current_hour_float += travel_to_next_spot
+            time_used_today += travel_to_next_spot
+            day_wise_itinerary[f"Day {current_day}"].append({"time": format_time_from_float(current_hour_float), "activity": spot["name"], "duration_hours": spot["avg_time"], "weather": get_weather(spot['location'])})
+            current_hour_float += spot["avg_time"]
+            time_used_today += spot["avg_time"]
+            current_location = spot['location']
 
-    # Add final hotel stay
-    if day <= max_activity_days and hotel_spot and time_used_today + hotel_spot["avg_time"] <= 8:
-        hotel_entry = {
-            "name": hotel_spot["name"],
-            "type": "hotel",
-            "duration_hours": hotel_spot["avg_time"],
-            "weather": hotel_spot["weather"],
-            "time": format_time(current_hour)
-        }
-        day_wise_itinerary[f"Day {day}"].append(hotel_entry)
+    # --- NEW: Add Nightly Hotel Stays ---
+    if chosen_hotel:
+        # Add a hotel stay for each night of the trip, except the last day.
+        for day_num in range(1, duration):
+            day_wise_itinerary[f"Day {day_num}"].append({
+                "time": "09:00 PM",
+                "activity": f"Check-in / Stay at {chosen_hotel['name']}",
+                "type": "hotel"
+            })
+    # --- END OF NEW SECTION ---
 
-    # Day N – Return
-    day_wise_itinerary[f"Day {duration}"] = [{
-        "time": "06:00 PM",
-        "activity": "Return travel",
-        "duration_hours": travel_time
-    }]
+    # Day N: Return Travel
+    if duration > 0:
+        day_wise_itinerary[f"Day {duration}"].append({
+            "time": "06:00 PM",
+            "activity": "Return travel",
+            "duration_hours": initial_travel_time
+        })
 
     return Response({
         "day_wise_itinerary": day_wise_itinerary,
-        "total_days": duration,
-        "proposed_budget": budget,
-        "predicted_budget": predicted_budget,
-        "actual_cost": cost_accumulated,
-        "hotel_cost": hotel_cost_total,
-        "actual_time_used": total_time_available - time_remaining,
-        "travel_time": travel_time,
+        "hotel_details": { "name": chosen_hotel["name"], "cost_per_night": chosen_hotel["estimated_cost"] } if chosen_hotel else None,
+        "alternatives": {
+            "hotels": alternative_hotels,
+            "attractions": alternative_attractions
+        },
+        "summary": {
+            "total_days": duration,
+            "proposed_budget": budget,
+            "predicted_budget": predicted_budget,
+            "actual_cost": round(cost_accumulated),
+        },
         "status": "success"
     })
