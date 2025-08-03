@@ -1,0 +1,264 @@
+{
+  "Eravikulam National Park": {
+    "avg_time": 3,
+    "cost": 420,
+    "tags": ["nature", "wildlife"],
+    "destination": "Munnar",
+    "type": "nature",
+    "location": { "lat": 10.2033, "lng": 77.0656 }
+  },
+  "Tea Museum": {
+    "avg_time": 2,
+    "cost": 150,
+    "tags": ["cultural", "museum"],
+    "destination": "Munnar",
+    "type": "museum",
+    "location": { "lat": 10.0807, "lng": 77.0595 }
+  },
+  "Mattupetty Dam": {
+    "avg_time": 1.5,
+    "cost": 50,
+    "tags": ["nature", "sightseeing"],
+    "destination": "Munnar",
+    "type": "nature",
+    "location": { "lat": 10.0910, "lng": 77.1281 }
+  },
+  "Top Station Viewpoint": {
+    "avg_time": 2.5,
+    "cost": 100,
+    "tags": ["nature", "viewpoint"],
+    "destination": "Munnar",
+    "type": "viewpoint",
+    "location": { "lat": 10.1036, "lng": 77.2483 }
+  },
+  "Kundala Lake": {
+    "avg_time": 1,
+    "cost": 200,
+    "tags": ["nature", "boating"],
+    "destination": "Munnar",
+    "type": "nature",
+    "location": { "lat": 10.1292, "lng": 77.1764 }
+  },
+  "Hotel Munnar Inn": {
+    "avg_time": 0,
+    "cost": 1000,
+    "tags": ["hotel", "stay"],
+    "destination": "Munnar",
+    "type": "hotel",
+    "location": { "lat": 10.0889, "lng": 77.0617 }
+  },
+  "Green Leaf Restaurant": {
+    "avg_time": 0,
+    "cost": 300,
+    "tags": ["food", "restaurant"],
+    "destination": "Munnar",
+    "type": "restaurant",
+    "location": { "lat": 10.0885, "lng": 77.0622 }
+  },
+
+  "Fort Kochi": {
+    "avg_time": 3.5,
+    "cost": 0,
+    "tags": ["heritage", "walks"],
+    "destination": "Kochi",
+    "type": "heritage",
+    "location": { "lat": 9.9633, "lng": 76.2424 }
+  },
+  "Mattancherry Palace": {
+    "avg_time": 1.5,
+    "cost": 100,
+    "tags": ["museum", "heritage"],
+    "destination": "Kochi",
+    "type": "museum",
+    "location": { "lat": 9.9636, "lng": 76.2595 }
+  },
+  "Chinese Fishing Nets": {
+    "avg_time": 0.5,
+    "cost": 0,
+    "tags": ["culture", "photography"],
+    "destination": "Kochi",
+    "type": "culture",
+    "location": { "lat": 9.9685, "lng": 76.2426 }
+  },
+  "Paradesi Synagogue": {
+    "avg_time": 0.5,
+    "cost": 10,
+    "tags": ["religious", "heritage"],
+    "destination": "Kochi",
+    "type": "religious",
+    "location": { "lat": 9.9631, "lng": 76.2590 }
+  },
+  "Hotel Sea View": {
+    "avg_time": 0,
+    "cost": 900,
+    "tags": ["hotel", "stay"],
+    "destination": "Kochi",
+    "type": "hotel",
+    "location": { "lat": 9.9689, "lng": 76.2431 }
+  },
+  "Malabar Spice Restaurant": {
+    "avg_time": 0,
+    "cost": 250,
+    "tags": ["food", "restaurant"],
+    "destination": "Kochi",
+    "type": "restaurant",
+    "location": { "lat": 9.9692, "lng": 76.2440 }
+  },
+
+  "Alleppey Backwaters Houseboat": {
+    "avg_time": 6,
+    "cost": 8000,
+    "tags": ["boating", "luxury", "nature"],
+    "destination": "Alleppey",
+    "type": "boating",
+    "location": { "lat": 9.4981, "lng": 76.3388 }
+  },
+  "Marari Beach": {
+    "avg_time": 2.5,
+    "cost": 0,
+    "tags": ["beach", "relaxation"],
+    "destination": "Alleppey",
+    "type": "beach",
+    "location": { "lat": 9.5972, "lng": 76.3019 }
+  },
+  "Alappuzha Beach": {
+    "avg_time": 1.5,
+    "cost": 0,
+    "tags": ["beach", "walks"],
+    "destination": "Alleppey",
+    "type": "beach",
+    "location": { "lat": 9.5000, "lng": 76.3300 }
+  },
+  "Palm Beach Hotel": {
+    "avg_time": 0,
+    "cost": 850,
+    "tags": ["hotel", "beachfront"],
+    "destination": "Alleppey",
+    "type": "hotel",
+    "location": { "lat": 9.4985, "lng": 76.3285 }
+  },
+  "Backwater Bites Restaurant": {
+    "avg_time": 0,
+    "cost": 280,
+    "tags": ["food", "restaurant"],
+    "destination": "Alleppey",
+    "type": "restaurant",
+    "location": { "lat": 9.4990, "lng": 76.3300 }
+  },
+
+  "Periyar National Park": {
+    "avg_time": 3.5,
+    "cost": 550,
+    "tags": ["wildlife", "adventure"],
+    "destination": "Thekkady",
+    "type": "wildlife",
+    "location": { "lat": 9.4669, "lng": 77.2478 }
+  },
+  "Thekkady Spice Plantation": {
+    "avg_time": 1.5,
+    "cost": 200,
+    "tags": ["culture", "nature"],
+    "destination": "Thekkady",
+    "type": "nature",
+    "location": { "lat": 9.4660, "lng": 77.2525 }
+  },
+  "Wilderness Hotel": {
+    "avg_time": 0,
+    "cost": 950,
+    "tags": ["hotel", "nature"],
+    "destination": "Thekkady",
+    "type": "hotel",
+    "location": { "lat": 9.4690, "lng": 77.2500 }
+  },
+  "Spice Aroma Restaurant": {
+    "avg_time": 0,
+    "cost": 220,
+    "tags": ["food", "restaurant"],
+    "destination": "Thekkady",
+    "type": "restaurant",
+    "location": { "lat": 9.4675, "lng": 77.2510 }
+  },
+
+  "Edakkal Caves": {
+    "avg_time": 2.5,
+    "cost": 50,
+    "tags": ["adventure", "history"],
+    "destination": "Wayanad",
+    "type": "adventure",
+    "location": { "lat": 11.6305, "lng": 76.2404 }
+  },
+  "Chembra Peak": {
+    "avg_time": 4,
+    "cost": 750,
+    "tags": ["trekking", "mountain"],
+    "destination": "Wayanad",
+    "type": "trekking",
+    "location": { "lat": 11.5585, "lng": 76.0737 }
+  },
+  "Wayanad Retreat": {
+    "avg_time": 0,
+    "cost": 980,
+    "tags": ["hotel", "nature"],
+    "destination": "Wayanad",
+    "type": "hotel",
+    "location": { "lat": 11.6850, "lng": 76.1319 }
+  },
+  "Hillside Kitchen": {
+    "avg_time": 0,
+    "cost": 270,
+    "tags": ["food", "restaurant"],
+    "destination": "Wayanad",
+    "type": "restaurant",
+    "location": { "lat": 11.6850, "lng": 76.1325 }
+  },
+
+  "Kovalam Beach": {
+    "avg_time": 3,
+    "cost": 0,
+    "tags": ["beach", "relaxation"],
+    "destination": "Trivandrum",
+    "type": "beach",
+    "location": { "lat": 8.4026, "lng": 76.9784 }
+  },
+  "Napier Museum": {
+    "avg_time": 2,
+    "cost": 100,
+    "tags": ["museum", "culture"],
+    "destination": "Trivandrum",
+    "type": "museum",
+    "location": { "lat": 8.5069, "lng": 76.9565 }
+  },
+  "Padmanabhaswamy Temple": {
+    "avg_time": 1.5,
+    "cost": 0,
+    "tags": ["religious", "heritage"],
+    "destination": "Trivandrum",
+    "type": "religious",
+    "location": { "lat": 8.4826, "lng": 76.9431 }
+  },
+  "Poovar Island Boating": {
+    "avg_time": 2,
+    "cost": 1500,
+    "tags": ["boating", "nature"],
+    "destination": "Trivandrum",
+    "type": "boating",
+    "location": { "lat": 8.3194, "lng": 77.0733 }
+  },
+
+  "Jatayu Earth's Center": {
+    "avg_time": 3,
+    "cost": 450,
+    "tags": ["adventure", "viewpoint"],
+    "destination": "Kollam",
+    "type": "viewpoint",
+    "location": { "lat": 8.8696, "lng": 76.8630 }
+  },
+  "Varkala Cliff": {
+    "avg_time": 2,
+    "cost": 0,
+    "tags": ["beach", "viewpoint"],
+    "destination": "Varkala",
+    "type": "viewpoint",
+    "location": { "lat": 8.7379, "lng": 76.7063 }
+  }
+}
