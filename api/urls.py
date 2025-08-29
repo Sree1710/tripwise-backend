@@ -5,8 +5,11 @@ from . import user_itinerary
 from .pdf_export import ExportPDFView
 
 urlpatterns = [
+
+    # Single Login (Admin + User)
+    path("login/", LoginView.as_view()),
+
     # Admin
-    path("admin/login/", AdminLoginView.as_view()),
     path("admin/destinations/", DestinationAdminView.as_view({"get": "list"})),
     path("admin/destination/<str:pk>/", DestinationAdminView.as_view({"put": "update", "delete": "destroy"})),
     path("admin/emergency/", EmergencyInfoView.as_view({"get": "list", "post": "create"})),
@@ -18,7 +21,6 @@ urlpatterns = [
 
     # User
     path("user/register/", RegisterUser.as_view()),
-    path("user/login/", LoginUser.as_view()),
     path("user/plan-trip/", PlanTrip.as_view()),
     path("user/past-trips/", PastTrips.as_view()),
     path("user/suggest/", SuggestDestination.as_view()),

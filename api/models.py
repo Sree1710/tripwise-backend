@@ -22,11 +22,20 @@ class MetadataTag(Document):
     meta = {'collection': 'metadata_tag'}
 
 class UserProfile(Document):
-    user_id = StringField(required=True)
+    user_id = StringField(required=True)  # Django User.id or uuid
+    first_name = StringField(max_length=150)
+    last_name = StringField(max_length=150)
+    email = StringField(required=True)  # keep unique if you want
     dob = DateField()
     location = StringField()
+    contact_number = StringField()
     is_approved = BooleanField(default=False)
-    meta = {'collection': 'user_profile'}
+    role = StringField(choices=["admin", "user"], default="user")  # optional
+    meta = {
+        'collection': 'user_profile',
+        'indexes': ['email']  # faster lookup
+    }
+
 
 class TripLog(Document):
     user_id = StringField(required=True)

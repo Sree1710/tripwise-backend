@@ -135,22 +135,3 @@ class DestinationSuggestionAdminView(ViewSet):
         except DestinationSuggestion.DoesNotExist:
             return Response({"message": "Suggestion not found"}, status=404)
 
-# Admin login for secure access
-class AdminLoginView(APIView):
-    def post(self, request):
-        username = request.data.get("username")
-        password = request.data.get("password")
-
-        if not username or not password:
-            return Response({"error": "Username and password are required"}, status=400)
-
-        if (
-            username == settings.ADMIN_USERNAME
-            and password == settings.ADMIN_PASSWORD
-        ):
-            return Response({
-                "message": "Admin login successful",
-                "admin": username
-            })
-
-        return Response({"error": "Invalid admin credentials"}, status=401)
