@@ -5,16 +5,22 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 import re
+import jwt
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from api.models import (
     UserProfile, TripLog, DestinationSuggestion, Complaint, TripReview
 )
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from rest_framework.decorators import authentication_classes, permission_classes
+from api.auth import JWTAuthentication
+from api.permissions import IsAdmin, IsUser, IsAdminOrUser
 
 
 class RegisterUser(APIView):
+    authentication_classes = []   # 🚫 No JWT required
+    permission_classes = []
     def post(self, request):
         data = request.data
 
@@ -115,6 +121,8 @@ class RegisterUser(APIView):
 
 
 class LoginView(APIView):
+    authentication_classes = []   # 🚫 No JWT required
+    permission_classes = []
     def post(self, request):
         username = request.data.get("username")
         password = request.data.get("password")
@@ -124,10 +132,17 @@ class LoginView(APIView):
 
         # ✅ Admin login check
         if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
+            payload = {
+                "username": username,
+                "role": "admin",
+                "exp": datetime.now(timezone.utc) + timedelta(seconds=settings.JWT_EXP_DELTA)
+            }
+            token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
             return Response({
                 "message": "Admin login successful",
                 "role": "admin",
-                "admin": username
+                "token": token
             })
 
         # ✅ Normal user login check
@@ -135,16 +150,26 @@ class LoginView(APIView):
         if user:
             profile = UserProfile.objects(user_id=str(user.id)).first()
             if profile and profile.is_approved:
+                payload = {
+                    "user_id": str(user.id),
+                    "username": username,
+                    "role": "user",
+                    "exp": datetime.now(timezone.utc) + timedelta(seconds=settings.JWT_EXP_DELTA)
+                }
+                token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
                 return Response({
                     "message": "Login successful",
                     "role": "user",
-                    "user_id": str(user.id)
+                    "token": token
                 })
             return Response({"error": "Account not approved yet"}, status=403)
 
         return Response({"error": "Invalid credentials"}, status=401)
 
 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 class PlanTrip(APIView):
     def post(self, request):
         data = request.data
@@ -160,7 +185,8 @@ class PlanTrip(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=400)
 
-
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminOrUser])
 class PastTrips(APIView):
     def get(self, request):
         user_id = request.query_params.get("user_id")
@@ -173,6 +199,8 @@ class PastTrips(APIView):
         return Response(data)
 
 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 class SuggestDestination(APIView):
     def post(self, request):
         data = request.data
@@ -186,6 +214,8 @@ class SuggestDestination(APIView):
         return Response({"message": "Destination suggestion submitted"}, status=201)
 
 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 class SubmitComplaint(APIView):
     def post(self, request):
         data = request.data
@@ -198,6 +228,8 @@ class SubmitComplaint(APIView):
         return Response({"message": "Complaint submitted"}, status=201)
 
 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 class ReviewTrip(APIView):
     def post(self, request):
         data = request.data
@@ -210,7 +242,8 @@ class ReviewTrip(APIView):
         review.save()
         return Response({"message": "Review submitted"}, status=201)
 
-
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdminOrUser])
 class DashboardStats(APIView):
     def get(self, request):
         user_id = request.query_params.get("user_id")

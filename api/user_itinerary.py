@@ -1,4 +1,4 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from .ml.predict import predict_budget
@@ -7,6 +7,8 @@ from .utils.weather import get_weather
 from .utils.db import get_hidden_spots
 from datetime import datetime, timedelta, time
 import math
+from api.auth import JWTAuthentication
+from api.permissions import IsUser
 
 
 def estimate_internal_travel_time(loc1, loc2):
@@ -29,6 +31,8 @@ def get_priority_score(spot, interests):
 
 
 @api_view(['POST'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 def generate_itinerary(request):
     data = request.data
     origin = data["starting_location"]

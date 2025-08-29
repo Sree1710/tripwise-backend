@@ -8,8 +8,15 @@ from api.models import (
     Destination, EmergencyInfo, MetadataTag,
     UserProfile, Complaint, TripLog, DestinationSuggestion
 )
+from rest_framework.decorators import authentication_classes, permission_classes
+from api.auth import JWTAuthentication
+from api.permissions import IsAdmin, IsUser, IsAdminOrUser
+
+
 
 # Destination approval and deletion
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class DestinationAdminView(ViewSet):
     def list(self, request):
         destinations = Destination.objects.all()
@@ -33,7 +40,11 @@ class DestinationAdminView(ViewSet):
         except Destination.DoesNotExist:
             return Response({"message": "Destination not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+
 # Emergency info management
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class EmergencyInfoView(ViewSet):
     def list(self, request):
         infos = EmergencyInfo.objects.all()
@@ -45,7 +56,10 @@ class EmergencyInfoView(ViewSet):
         info.save()
         return Response({"message": "Emergency info added"}, status=201)
 
+
 # Metadata tags (cultural, accessibility)
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class MetadataTagView(ViewSet):
     def list(self, request):
         tags = MetadataTag.objects.all()
@@ -57,7 +71,10 @@ class MetadataTagView(ViewSet):
         tag.save()
         return Response({"message": "Metadata tag created"}, status=201)
 
+
 # Approve users after registration
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class AdminUserView(APIView):
     def get(self, request):
         users = UserProfile.objects.all()
@@ -73,7 +90,10 @@ class AdminUserView(APIView):
         except UserProfile.DoesNotExist:
             return Response({"message": "User not found"}, status=404)
 
+
 # View/respond to user complaints
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class AdminComplaintView(APIView):
     def get(self, request):
         complaints = Complaint.objects.all()
@@ -89,7 +109,10 @@ class AdminComplaintView(APIView):
         except Complaint.DoesNotExist:
             return Response({"message": "Complaint not found"}, status=404)
 
+
 # Admin dashboard with analytics
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class AdminAnalyticsView(APIView):
     def get(self, request):
         user_count = User.objects.count()
@@ -104,7 +127,10 @@ class AdminAnalyticsView(APIView):
             "average_budget": avg_budget
         })
 
+
 # Approve or reject user-suggested destinations
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
 class DestinationSuggestionAdminView(ViewSet):
     def list(self, request):
         suggestions = DestinationSuggestion.objects.all()

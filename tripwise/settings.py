@@ -21,6 +21,9 @@ load_dotenv(BASE_DIR / ".env")
 MOCK_API = os.getenv("MOCK_API", "False").lower() == "true"
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM')
+JWT_EXP_DELTA = 86400  # 1 day (in seconds)
 
 
 # Quick-start development settings - unsuitable for production
@@ -67,6 +70,13 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOWED_ORIGINS += ["http://127.0.0.1:3000"]
 
 CORS_ALLOW_CREDENTIALS = True
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
+
 
 ROOT_URLCONF = 'tripwise.urls'
 
