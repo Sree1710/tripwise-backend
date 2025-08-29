@@ -1,6 +1,7 @@
 # api/models.py
 
-from mongoengine import Document, StringField, BooleanField, DateField, FloatField, ListField
+from mongoengine import Document, StringField, BooleanField, DateField, FloatField, ListField, DictField, DateTimeField
+from datetime import datetime, timezone
 
 class Destination(Document):
     name = StringField(required=True, max_length=100)
@@ -75,3 +76,10 @@ class PointOfInterest(Document):
     hidden = BooleanField(default=False)
     tags = ListField(StringField())
     meta = {'collection': 'point_of_interest'}
+
+class UserItinerary(Document):
+    user_id = StringField(required=True)
+    itinerary_data = DictField(required=True)  # stores the full response JSON
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    meta = {"collection": "user_itineraries"}

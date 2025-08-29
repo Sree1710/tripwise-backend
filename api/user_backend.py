@@ -168,22 +168,6 @@ class LoginView(APIView):
         return Response({"error": "Invalid credentials"}, status=401)
 
 
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsUser])
-class PlanTrip(APIView):
-    def post(self, request):
-        data = request.data
-        try:
-            trip = TripLog(
-                user_id=data["user_id"],
-                destination=data["destination"],
-                budget=float(data["budget"]),
-                date=datetime.strptime(data["date"], "%Y-%m-%d")
-            )
-            trip.save()
-            return Response({"message": "Trip saved"}, status=201)
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
 
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminOrUser])

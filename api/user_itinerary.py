@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, time
 import math
 from api.auth import JWTAuthentication
 from api.permissions import IsUser
+from api.models import UserItinerary
 
 
 def estimate_internal_travel_time(loc1, loc2):
@@ -34,6 +35,7 @@ def get_priority_score(spot, interests):
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
 def generate_itinerary(request):
+    user_id = request.auth.get("user_id")
     data = request.data
     origin = data["starting_location"]
     destination = data["destination"]
@@ -124,6 +126,21 @@ def generate_itinerary(request):
     for spot in final_itinerary_spots:
         travel_to_next_spot = estimate_internal_travel_time(current_location, spot['location'])
 
+        # ✅ Add lunch stop if not already done & it's past 1 PM
+        if not lunch_added_today and current_hour_float >= 13.0 and restaurants:
+            chosen_restaurant = restaurants[0]  # pick cheapest/best
+            day_wise_itinerary[f"Day {current_day}"].append({
+                "time": format_time_from_float(current_hour_float),
+                "activity": f"Lunch at {chosen_restaurant['name']}",
+                "duration_hours": 1,
+                "type": "restaurant"
+            })
+            current_hour_float += 1
+            time_used_today += 1
+            cost_accumulated += chosen_restaurant["estimated_cost"]
+            lunch_added_today = True
+            current_location = chosen_restaurant['location']
+
         if time_used_today + travel_to_next_spot + spot["avg_time"] > daily_activity_hours and current_day < duration:
             current_day += 1
             current_hour_float = 8.0
@@ -168,7 +185,8 @@ def generate_itinerary(request):
             "duration_hours": initial_travel_time
         })
 
-    return Response({
+    response_data = {
+        "user_id": user_id,
         "day_wise_itinerary": day_wise_itinerary,
         "hotel_details": {"name": chosen_hotel["name"], "cost_per_night": chosen_hotel["estimated_cost"]} if chosen_hotel else None,
         "alternatives": {"hotels": alternative_hotels, "attractions": alternative_attractions},
@@ -179,6 +197,12 @@ def generate_itinerary(request):
             "proposed_budget": budget,
             "predicted_budget": predicted_budget,
             "actual_cost": round(cost_accumulated),
+            "destination": destination
         },
         "status": "success"
-    })
+    }
+
+    # ✅ Save to MongoDB
+    UserItinerary(user_id=user_id, itinerary_data=response_data).save()
+
+    return Response(response_data, status=status.HTTP_200_OK)

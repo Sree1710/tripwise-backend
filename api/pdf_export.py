@@ -3,7 +3,12 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import FileResponse
 from .utils.pdf_generator import generate_itinerary_pdf
+from rest_framework.decorators import authentication_classes, permission_classes
+from api.auth import JWTAuthentication
+from api.permissions import IsAdmin, IsUser, IsAdminOrUser
 
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
 class ExportPDFView(APIView):
     def post(self, request):
         try:

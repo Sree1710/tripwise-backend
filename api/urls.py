@@ -14,14 +14,14 @@ urlpatterns = [
     path("admin/destination/<str:pk>/", DestinationAdminView.as_view({"put": "update", "delete": "destroy"})),
     path("admin/emergency/", EmergencyInfoView.as_view({"get": "list", "post": "create"})),
     path("admin/tags/", MetadataTagView.as_view({"get": "list", "post": "create"})),
-    path("admin/users/", AdminUserView.as_view()),
+    path("admin/users/", AdminUserView.as_view()), # View all users
+    path("admin/approve-user/", ApproveUserView.as_view()), # Approve user
     path("admin/complaints/", AdminComplaintView.as_view()),
     path("admin/analytics/", AdminAnalyticsView.as_view()),
     path("admin/suggestions/", DestinationSuggestionAdminView.as_view({"get": "list", "delete": "destroy"})),
 
     # User
     path("user/register/", RegisterUser.as_view()),
-    path("user/plan-trip/", PlanTrip.as_view()),
     path("user/past-trips/", PastTrips.as_view()),
     path("user/suggest/", SuggestDestination.as_view()),
     path("user/complaint/", SubmitComplaint.as_view()),
