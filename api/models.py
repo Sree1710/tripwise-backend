@@ -30,6 +30,8 @@ class UserProfile(Document):
     dob = DateField()
     location = StringField()
     contact_number = StringField()
+    gender = StringField(required=True)
+    profile_image_id = StringField()  
     is_approved = BooleanField(default=False)
     role = StringField(choices=["admin", "user"], default="user")  # optional
     meta = {
