@@ -133,6 +133,10 @@ class RegisterUser(APIView):
                 content_type=content_type)
             except Exception as e:
                 return Response({"error": f"Failed to store profile image: {str(e)}"},status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({"error": "Image is mandatory"}, status=status.HTTP_400_BAD_REQUEST)
+            
+
         # --- End Profile Image Upload ---
 
         # --- Create User & Profile ---
