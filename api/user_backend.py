@@ -261,19 +261,46 @@ class PastTrips(APIView):
 
 
 #Suggest Destination
+#Suggest Destination
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
 class SuggestDestination(APIView):
     def post(self, request):
         data = request.data
+
+        # Required fields
+        required_fields = [
+            "user_id", "name", "destination",
+            "avg_time", "estimated_cost",
+            "tags", "type", "location"
+        ]
+        for field in required_fields:
+            if field not in data:
+                return Response({"error": f"{field} is required"}, status=400)
+
+        # Validate location
+        if "lat" not in data["location"] or "lng" not in data["location"]:
+            return Response({"error": "location must include lat and lng"}, status=400)
+
+        # Save suggestion
         suggestion = DestinationSuggestion(
             user_id=data["user_id"],
             name=data["name"],
-            description=data.get("description", ""),
-            coordinates=data.get("coordinates", "")
+            destination=data["destination"],
+            avg_time=float(data["avg_time"]),
+            estimated_cost=float(data["estimated_cost"]),
+            tags=data["tags"],
+            type=data["type"],
+            location={
+                "lat": float(data["location"]["lat"]),
+                "lng": float(data["location"]["lng"])
+            }
         )
         suggestion.save()
+
         return Response({"message": "Destination suggestion submitted"}, status=201)
+
+
 
 #Submit Complaint
 @authentication_classes([JWTAuthentication])
@@ -304,6 +331,7 @@ class ReviewTrip(APIView):
         review.save()
         return Response({"message": "Review submitted"}, status=201)
 
+# Dashboard Stats
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminOrUser])
 class DashboardStats(APIView):

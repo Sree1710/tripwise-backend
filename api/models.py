@@ -1,6 +1,6 @@
 # api/models.py
 
-from mongoengine import Document, StringField, BooleanField, DateField, FloatField, ListField, DictField, DateTimeField
+from mongoengine import Document, StringField, BooleanField, DateField, FloatField, ListField, DictField, DateTimeField, EmbeddedDocument, EmbeddedDocumentField
 from datetime import datetime, timezone
 
 class Destination(Document):
@@ -47,11 +47,21 @@ class TripLog(Document):
     date = DateField(default=None)
     meta = {'collection': 'trip_log'}
 
+
+class Location(EmbeddedDocument):
+    lat = FloatField(required=True)
+    lng = FloatField(required=True)
+
 class DestinationSuggestion(Document):
     user_id = StringField()
     name = StringField()
-    description = StringField()
-    coordinates = StringField()
+    destination = StringField()
+    avg_time = FloatField()
+    estimated_cost = FloatField()
+    tags = ListField(StringField())
+    type = StringField()
+    location = EmbeddedDocumentField(Location)   # instead of coordinates string
+
     meta = {'collection': 'destination_suggestion'}
 
 class Complaint(Document):
