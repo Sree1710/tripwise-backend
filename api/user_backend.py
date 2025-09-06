@@ -312,6 +312,7 @@ class DashboardStats(APIView):
             "complaints_filed": complaints
         })
 
+# Profile Picture Retrieval
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
 class ProfilePictureView(APIView):
@@ -330,4 +331,21 @@ class ProfilePictureView(APIView):
             return Response({"error": "Failed to retrieve image"}, status=500)
 
         # Return the image as binary
+        return HttpResponse(grid_out.read(), content_type="image/jpeg")
+
+# View other user's profile picture (Admin only)
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
+class UserProfilePictureView(APIView):
+    def get(self, request, user_id):
+        profile = UserProfile.objects(id=user_id).first()
+
+        if not profile or not profile.profile_image_id:
+            return Response({"error": "No profile picture found"}, status=404)
+
+        try:
+            grid_out = fs.get(ObjectId(profile.profile_image_id))
+        except Exception:
+            return Response({"error": "Failed to retrieve image"}, status=500)
+
         return HttpResponse(grid_out.read(), content_type="image/jpeg")

@@ -19,6 +19,8 @@ urlpatterns = [
     path("admin/complaints/", AdminComplaintView.as_view()),
     path("admin/analytics/", AdminAnalyticsView.as_view()),
     path("admin/suggestions/", DestinationSuggestionAdminView.as_view({"get": "list", "delete": "destroy"})),
+    # Admin fetches any user's picture by id
+    path("user/<str:user_id>/profile-picture/", UserProfilePictureView.as_view(), name="user-profile-picture"),
 
     # User
     path("user/register/", RegisterUser.as_view()),

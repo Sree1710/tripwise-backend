@@ -80,8 +80,32 @@ class MetadataTagView(ViewSet):
 class AdminUserView(APIView):
     def get(self, request):
         users = UserProfile.objects.all()
-        data = [{"id": str(u.id), "user_id": u.user_id, "location": u.location, "is_approved": u.is_approved} for u in users]
+        data = []
+
+        for u in users:
+            # Build image URL if available
+            image_url = None
+            if u.profile_image_id:
+                image_url = request.build_absolute_uri(
+                    f"/api/user/{u.id}/profile-picture/"
+                )
+
+            data.append({
+                "id": str(u.id),
+                "user_id": u.user_id,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "dob": u.dob,
+                "gender": u.gender,
+                "contact_number": u.contact_number,
+                "email": u.email,
+                "location": u.location,
+                "is_approved": u.is_approved,
+                "profile_image": image_url,   # add image URL here
+            })
+
         return Response(data)
+
     
 
 # Approve users after registration (only for admin)
