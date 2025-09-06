@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from api.models import (
-    UserProfile, TripLog, DestinationSuggestion, Complaint, TripReview
+    UserProfile, TripLog, DestinationSuggestion, Complaint, TripReview, UserItinerary
 )
 from datetime import datetime, timedelta, timezone
 from rest_framework.decorators import authentication_classes, permission_classes
@@ -238,19 +238,26 @@ class LoginView(APIView):
         return Response({"error": "Invalid Credentials."}, status=401)
 
 
-#Past Trips
+# Past Trips
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminOrUser])
 class PastTrips(APIView):
-    def get(self, request):
-        user_id = request.query_params.get("user_id")
-        trips = TripLog.objects(user_id=user_id)
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"error": "user_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        trips = UserItinerary.objects(user_id=str(user_id))
         data = [{
-            "destination": t.destination,
-            "budget": t.budget,
-            "date": t.date.strftime("%Y-%m-%d")
+            "destination": t.itinerary_data["summary"]["destination"],
+            "budget": t.itinerary_data["summary"]["proposed_budget"],
+            "start_date": t.itinerary_data["summary"]["start_date"],
+            "end_date": t.itinerary_data["summary"]["end_date"],
+            "actual_cost": t.itinerary_data["summary"]["actual_cost"]
         } for t in trips]
+        
         return Response(data)
+
 
 
 #Suggest Destination
@@ -297,15 +304,32 @@ class ReviewTrip(APIView):
         review.save()
         return Response({"message": "Review submitted"}, status=201)
 
-#Dashboard Stats
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdminOrUser])
 class DashboardStats(APIView):
-    def get(self, request):
-        user_id = request.query_params.get("user_id")
-        total_trips = TripLog.objects(user_id=user_id).count()
-        avg_budget = TripLog.objects(user_id=user_id).average("budget") or 0
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response(
+                {"error": "user_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_id = str(user_id)  # convert to string to match DB
+
+        trips = UserItinerary.objects(user_id=user_id)
+        total_trips = trips.count()
+        # Compute average proposed_budget
+        if total_trips > 0:
+            avg_budget = sum(
+                t.itinerary_data["summary"]["proposed_budget"] for t in trips
+            ) / total_trips
+        else:
+            avg_budget = 0
+
+        # Complaints still fetched from Complaint collection if needed
         complaints = Complaint.objects(user_id=user_id).count()
+
         return Response({
             "total_trips": total_trips,
             "average_budget": avg_budget,
