@@ -23,6 +23,7 @@ ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
 JWT_SECRET = os.environ.get('JWT_SECRET')
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM')
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 JWT_EXP_DELTA = 86400  # 1 day (in seconds)
 
 

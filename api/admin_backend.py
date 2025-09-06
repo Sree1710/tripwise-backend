@@ -6,11 +6,13 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from api.models import (
     Destination, EmergencyInfo, MetadataTag,
-    UserProfile, Complaint, TripLog, DestinationSuggestion
+    UserProfile, Complaint, UserItinerary, DestinationSuggestion
 )
 from rest_framework.decorators import authentication_classes, permission_classes
 from api.auth import JWTAuthentication
 from api.permissions import IsAdmin, IsUser, IsAdminOrUser
+from collections import Counter
+from datetime import datetime, timedelta
 
 
 
@@ -72,23 +74,53 @@ class MetadataTagView(ViewSet):
         return Response({"message": "Metadata tag created"}, status=201)
 
 
-# Approve users after registration
+# View all users (only for admin)
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdmin])
 class AdminUserView(APIView):
     def get(self, request):
         users = UserProfile.objects.all()
-        data = [{"id": str(u.id), "user_id": u.user_id, "location": u.location, "is_approved": u.is_approved} for u in users]
+        data = []
+
+        for u in users:
+            # Build image URL if available
+            image_url = None
+            if u.profile_image_id:
+                image_url = request.build_absolute_uri(
+                    f"/api/user/{u.id}/profile-picture/"
+                )
+
+            data.append({
+                "id": str(u.id),
+                "user_id": u.user_id,
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "dob": u.dob,
+                "gender": u.gender,
+                "contact_number": u.contact_number,
+                "email": u.email,
+                "location": u.location,
+                "is_approved": u.is_approved,
+                "profile_image": image_url,   # add image URL here
+            })
+
         return Response(data)
 
+    
+
+# Approve users after registration (only for admin)
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAdmin])
+class ApproveUserView(APIView):
     def post(self, request):
         try:
-            user = UserProfile.objects.get(id=request.data["user_id"])
-            user.is_approved = True
-            user.save()
-            return Response({"message": "User approved"})
-        except UserProfile.DoesNotExist:
+            user = UserProfile.objects.get(id=request.data["user_id"]) 
+            user.is_approved = True 
+            user.save() 
+            return Response({"message": "User approved"}) 
+        except UserProfile.DoesNotExist: 
             return Response({"message": "User not found"}, status=404)
+
 
 
 # View/respond to user complaints
@@ -109,24 +141,52 @@ class AdminComplaintView(APIView):
         except Complaint.DoesNotExist:
             return Response({"message": "Complaint not found"}, status=404)
 
-
-# Admin dashboard with analytics
+#Admin analytics
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdmin])
 class AdminAnalyticsView(APIView):
     def get(self, request):
+        # Total users
         user_count = User.objects.count()
-        trip_count = TripLog.objects.count()
-        try:
-            avg_budget = sum(t.budget for t in TripLog.objects if t.budget) / trip_count
-        except ZeroDivisionError:
-            avg_budget = 0
+
+        # Total trips
+        trip_count = UserItinerary.objects.count()
+
+        # Top destinations
+        destinations = [
+            t.itinerary_data.get("summary", {}).get("destination", "Unknown")
+            for t in UserItinerary.objects
+            if t.itinerary_data.get("summary", {}).get("destination", None)
+        ]
+        dest_counter = Counter(destinations)
+        top_destinations = sorted(
+            [{"destination": dest, "trips": count} for dest, count in dest_counter.items()],
+            key=lambda x: x["trips"],
+            reverse=True
+        )[:5]
+
+        # Trips in last 30 days
+        one_month_ago = datetime.now().date() - timedelta(days=30)
+        recent_trips = [
+            t for t in UserItinerary.objects
+            if datetime.strptime(t.itinerary_data.get("summary", {}).get("start_date", "1900-01-01"), "%Y-%m-%d").date() >= one_month_ago
+        ]
+
+        # Top users by number of trips
+        user_trips_counter = Counter([t.user_id for t in UserItinerary.objects])
+        top_users_by_trips = sorted(
+            [{"user_id": uid, "no_of_trips": count} for uid, count in user_trips_counter.items()],
+            key=lambda x: x["no_of_trips"],
+            reverse=True
+        )[:5]
+
         return Response({
             "total_users": user_count,
             "total_trips": trip_count,
-            "average_budget": avg_budget
+            "top_destinations": top_destinations,
+            "trips_last_30_days": len(recent_trips),
+            "top_users_by_trips": top_users_by_trips
         })
-
 
 # Approve or reject user-suggested destinations
 @authentication_classes([JWTAuthentication])
