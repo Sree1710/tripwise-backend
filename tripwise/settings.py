@@ -26,6 +26,15 @@ JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM')
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 JWT_EXP_DELTA = 86400  # 1 day (in seconds)
 
+# API Keys (add these to your environment variables)
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
+
+# API Rate Limiting
+API_REQUEST_TIMEOUT = 10  # seconds
+MAX_PLACES_PER_TYPE = 5
+MAX_HIDDEN_SPOTS = 10
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
