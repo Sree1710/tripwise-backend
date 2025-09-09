@@ -1,6 +1,8 @@
 import os
+import requests
 from django.conf import settings
 from api.models import PointOfInterest
+from pymongo import MongoClient
 
 def get_hidden_spots(destination, interests):
     """
@@ -8,7 +10,7 @@ def get_hidden_spots(destination, interests):
     Uses mock data if MOCK_API=True in settings.py.
     """
     if getattr(settings, "MOCK_API", False):
-        # Return mock data
+        # Your existing mock data
         return [
             {
                 "name": "Secret Forest Trail",
@@ -26,20 +28,38 @@ def get_hidden_spots(destination, interests):
             }
         ]
     
-    # Fetch from MongoDB (non-mock)
-    all_spots = PointOfInterest.objects(destination=destination).all()
-    hidden_spots = []
+    try:
+        # Live MongoDB query with enhanced filtering
+        all_spots = PointOfInterest.objects(destination=destination).all()
+        hidden_spots = []
 
-    for spot in all_spots:
-        # Consider spots with less popular tags as "hidden"
-        if any(tag in interests for tag in spot.tags):
-            if "hidden" in spot.tags or "secret" in spot.name.lower() or spot.estimated_cost < 100:
+        for spot in all_spots:
+            # Enhanced criteria for "hidden" spots
+            is_hidden = (
+                "hidden" in spot.tags or 
+                "secret" in spot.name.lower() or 
+                "offbeat" in spot.tags or
+                spot.estimated_cost < 200 or
+                getattr(spot, 'popularity_score', 0) < 3.0
+            )
+            
+            # Check if spot matches user interests
+            if any(tag in interests for tag in spot.tags) and is_hidden:
                 hidden_spots.append({
                     "name": spot.name,
-                    "location": {"lat": 10.0, "lng": 77.0},  # Default or randomize if needed
+                    "location": {
+                        "lat": float(spot.location.get('lat', 10.0)), 
+                        "lng": float(spot.location.get('lng', 77.0))
+                    },
                     "avg_time": spot.avg_time,
                     "estimated_cost": spot.estimated_cost,
-                    "type": spot.tags[0] if spot.tags else "general"
+                    "type": spot.tags[0] if spot.tags else "general",
+                    "description": getattr(spot, 'description', ''),
+                    "rating": getattr(spot, 'rating', 0)
                 })
 
-    return hidden_spots
+        return hidden_spots[:10]  # Limit to top 10 hidden spots
+        
+    except Exception as e:
+        print(f"Database error: {e}")
+        return []  # Return empty list on database error
