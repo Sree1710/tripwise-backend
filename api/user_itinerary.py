@@ -14,8 +14,10 @@ from api.auth import JWTAuthentication
 from api.permissions import IsUser
 from api.models import UserItinerary
 
+
 # Set up logging
 logger = logging.getLogger(__name__)
+
 
 def get_cached_or_fetch(cache_key, fetch_function, *args, **kwargs):
     """Get data from cache or fetch from API with caching."""
@@ -44,6 +46,7 @@ def get_cached_or_fetch(cache_key, fetch_function, *args, **kwargs):
         logger.error(f"API fetch error for {cache_key}: {e}")
         return None
 
+
 def estimate_internal_travel_time(loc1, loc2):
     """Estimate travel time between two locations based on distance."""
     try:
@@ -71,6 +74,7 @@ def estimate_internal_travel_time(loc1, loc2):
         logger.warning(f"Error calculating travel time: {e}")
         return 0.5  # Default 30 minutes
 
+
 def format_time_from_float(hour_float):
     """Convert float hours to formatted time string."""
     try:
@@ -84,10 +88,20 @@ def format_time_from_float(hour_float):
         logger.warning(f"Error formatting time {hour_float}: {e}")
         return "12:00 PM"
 
+
 def get_priority_score(spot, interests):
-    """Calculate priority score for a spot based on user interests."""
+    """Enhanced priority score that favors hidden places."""
     try:
         base_score = 1 if spot.get("type") in interests else 0
+        
+        # 🔥 BIG BONUS for hidden places
+        if spot.get('is_hidden', False):
+            base_score += 2.0  # Major boost for hidden spots
+        
+        # Additional bonus for spots with "hidden" tags
+        spot_tags = spot.get("tags", [])
+        if any(tag in ["hidden", "secret", "offbeat", "local"] for tag in spot_tags):
+            base_score += 1.5  # Boost for hidden-tagged spots
         
         # Bonus points for higher ratings
         rating = spot.get("rating", 0)
@@ -96,16 +110,17 @@ def get_priority_score(spot, interests):
         elif rating > 3.5:
             base_score += 0.2
         
-        # Penalty for very expensive spots
+        # Reduced penalty for expensive spots (hidden gems can be valuable)
         cost = spot.get("estimated_cost", 0)
         if cost > 5000:
-            base_score -= 0.3
+            base_score -= 0.2  # Reduced from 0.3
         
         return max(0, base_score)
         
     except (KeyError, TypeError) as e:
         logger.warning(f"Error calculating priority score: {e}")
         return 0
+
 
 def validate_request_data(data):
     """Validate incoming request data."""
@@ -142,6 +157,7 @@ def validate_request_data(data):
     
     return True, ""
 
+
 def optimize_itinerary_schedule(spots, duration, daily_hours=8):
     """Optimize the scheduling of spots across days."""
     if not spots:
@@ -174,6 +190,7 @@ def optimize_itinerary_schedule(spots, duration, daily_hours=8):
             current_day_time = spot_time
     
     return day_schedules
+
 
 def add_meal_breaks(day_itinerary, restaurants, current_hour, day_num):
     """Add meal breaks to the day's itinerary."""
@@ -217,11 +234,12 @@ def add_meal_breaks(day_itinerary, restaurants, current_hour, day_num):
     
     return meals_added, current_hour
 
+
 @api_view(['POST'])
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
 def generate_itinerary(request):
-    """Generate a comprehensive travel itinerary with live API integration."""
+    """Generate a comprehensive travel itinerary with live API integration and hidden places prioritization."""
     
     try:
         # Get user ID from authentication
@@ -300,6 +318,12 @@ def generate_itinerary(request):
             hidden = []
             logger.warning("Hidden spots API failed, using empty list")
         
+        # Mark hidden spots explicitly
+        for spot in hidden:
+            spot['is_hidden'] = True
+            if 'tags' not in spot:
+                spot['tags'] = ['hidden']
+        
         # Combine and deduplicate spots
         all_spots_dict = {}
         for spot in pois + hidden:
@@ -310,6 +334,10 @@ def generate_itinerary(request):
                 all_spots_dict[spot_name] = spot
         
         all_spots = list(all_spots_dict.values())
+        
+        # Log hidden spots found
+        hidden_count = sum(1 for spot in all_spots if spot.get('is_hidden', False))
+        logger.info(f"Found {hidden_count} hidden spots out of {len(all_spots)} total spots")
         
         # Categorize spots
         hotels = sorted(
@@ -355,10 +383,15 @@ def generate_itinerary(request):
             if a.get("estimated_cost", 0) <= activity_budget * 0.4  # Max 40% of activity budget per attraction
         ]
         
+        # Sort by priority score (hidden places will have highest scores)
         sorted_attractions = sorted(
             affordable_attractions, 
             key=lambda x: (-x.get("priority_score", 0), x.get("estimated_cost", 0))
         )
+        
+        # Log priority distribution
+        high_priority = [s for s in sorted_attractions if s.get("priority_score", 0) >= 2.0]
+        logger.info(f"High priority spots (likely hidden): {len(high_priority)}")
         
         # Select final attractions
         final_itinerary_spots = []
@@ -501,6 +534,12 @@ def generate_itinerary(request):
                 "rating": spot.get("rating", 0)
             }
             
+            # Add hidden gem indicator
+            if spot.get('is_hidden', False):
+                activity_entry["is_hidden_gem"] = True
+                activity_entry["description"] = (activity_entry["description"] + 
+                    " [Hidden Gem]").strip()
+            
             if weather_info:
                 activity_entry["weather"] = weather_info
             
@@ -546,6 +585,13 @@ def generate_itinerary(request):
         
         total_cost = hotel_cost_total + meal_costs + activity_costs
         
+        # Count hidden gems in final itinerary
+        hidden_gems_count = sum(
+            1 for day_activities in day_wise_itinerary.values()
+            for activity in day_activities
+            if activity.get("is_hidden_gem", False)
+        )
+        
         # Prepare response
         response_data = {
             "user_id": user_id,
@@ -579,6 +625,7 @@ def generate_itinerary(request):
                 "destination": destination,
                 "origin": origin,
                 "total_attractions": len(final_itinerary_spots),
+                "hidden_gems_count": hidden_gems_count,  # New field
                 "budget_utilization": round((total_cost / budget) * 100, 1)
             },
             "route_info": route,
@@ -598,7 +645,7 @@ def generate_itinerary(request):
             logger.error(f"Failed to save itinerary: {e}")
             # Continue without failing the request
         
-        logger.info(f"Itinerary generated successfully: {len(final_itinerary_spots)} spots, ₹{total_cost}")
+        logger.info(f"Itinerary generated successfully: {len(final_itinerary_spots)} spots, ₹{total_cost}, {hidden_gems_count} hidden gems")
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
@@ -607,6 +654,7 @@ def generate_itinerary(request):
             {"error": "An unexpected error occurred while generating the itinerary. Please try again."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -633,6 +681,7 @@ def get_user_itineraries(request):
                 'end_date': summary.get('end_date', ''),
                 'total_days': summary.get('total_days', 0),
                 'actual_cost': summary.get('actual_cost', 0),
+                'hidden_gems_count': summary.get('hidden_gems_count', 0),
                 'created_at': itinerary.created_at.isoformat() if itinerary.created_at else None
             })
         
@@ -647,6 +696,7 @@ def get_user_itineraries(request):
             {"error": "Failed to fetch itineraries"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 @api_view(['GET'])
 @authentication_classes([JWTAuthentication])
@@ -677,6 +727,7 @@ def get_itinerary_detail(request, itinerary_id):
             {"error": "Failed to fetch itinerary details"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 @api_view(['DELETE'])
 @authentication_classes([JWTAuthentication])
