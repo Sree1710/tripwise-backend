@@ -11,7 +11,7 @@ from api.auth import JWTAuthentication
 from api.permissions import IsUser
 from api.models import UserItinerary
 
-
+#Mock Code
 def estimate_internal_travel_time(loc1, loc2):
     lat1, lon1 = loc1['lat'], loc1['lng']
     lat2, lon2 = loc2['lat'], loc2['lng']
