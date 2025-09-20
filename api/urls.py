@@ -31,4 +31,5 @@ urlpatterns = [
     path('generate-itinerary/', user_itinerary.generate_itinerary, name='generate-itinerary'),
     path("export-itinerary-pdf/", ExportPDFView.as_view(), name="export-pdf"),
     path("profile-picture/", ProfilePictureView.as_view(), name="profile-picture"),
+    path("user/viewcomplaints/", UserComplaints.as_view()),
 ]

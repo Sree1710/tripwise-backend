@@ -260,7 +260,6 @@ class PastTrips(APIView):
 
 
 #Suggest Destination
-#Suggest Destination
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
 class SuggestDestination(APIView):
@@ -314,6 +313,29 @@ class SubmitComplaint(APIView):
         )
         complaint.save()
         return Response({"message": "Complaint submitted"}, status=201)
+    
+
+#View All Complaints By User
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
+class UserComplaints(APIView):
+    def get(self, request):
+        user_id = request.user.id
+        complaints = Complaint.objects(user_id=str(user_id)).order_by('-id')  # MongoDB syntax
+        
+        complaints_data = []
+        for complaint in complaints:
+            complaints_data.append({
+                'id': str(complaint.id),  # MongoDB ObjectId to string
+                'subject': complaint.subject,
+                'message': complaint.message,
+                'admin_reply': complaint.reply,  # Map reply field to admin_reply
+                'created_at': complaint.created_at.isoformat() if hasattr(complaint, 'created_at') and complaint.created_at else None,
+                'reply_date': complaint.updated_at.isoformat() if hasattr(complaint, 'updated_at') and complaint.reply and complaint.updated_at else None,
+            })
+        
+        return Response({'complaints': complaints_data}, status=200)
+
 
 #Review Trip
 @authentication_classes([JWTAuthentication])
