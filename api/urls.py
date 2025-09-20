@@ -15,7 +15,6 @@ urlpatterns = [
     path("admin/emergency/", EmergencyInfoView.as_view({"get": "list", "post": "create"})),
     path("admin/tags/", MetadataTagView.as_view({"get": "list", "post": "create"})),
     path("admin/users/", AdminUserView.as_view()), # View all users
-    path("admin/approve-user/", ApproveUserView.as_view()), # Approve user
     path("admin/complaints/", AdminComplaintView.as_view()),
     path("admin/analytics/", AdminAnalyticsView.as_view()),
     path("admin/suggestions/", DestinationSuggestionAdminView.as_view({"get": "list", "delete": "destroy"})),
@@ -32,4 +31,5 @@ urlpatterns = [
     path('generate-itinerary/', user_itinerary.generate_itinerary, name='generate-itinerary'),
     path("export-itinerary-pdf/", ExportPDFView.as_view(), name="export-pdf"),
     path("profile-picture/", ProfilePictureView.as_view(), name="profile-picture"),
+    path("user/viewcomplaints/", UserComplaints.as_view()),
 ]

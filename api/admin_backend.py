@@ -106,20 +106,6 @@ class AdminUserView(APIView):
 
         return Response(data)
 
-    
-
-# Approve users after registration (only for admin)
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAdmin])
-class ApproveUserView(APIView):
-    def post(self, request):
-        try:
-            user = UserProfile.objects.get(id=request.data["user_id"]) 
-            user.is_approved = True 
-            user.save() 
-            return Response({"message": "User approved"}) 
-        except UserProfile.DoesNotExist: 
-            return Response({"message": "User not found"}, status=404)
 
 
 
@@ -128,18 +114,33 @@ class ApproveUserView(APIView):
 @permission_classes([IsAdmin])
 class AdminComplaintView(APIView):
     def get(self, request):
-        complaints = Complaint.objects.all()
-        data = [{"id": str(c.id), "user_id": c.user_id, "subject": c.subject, "message": c.message, "reply": c.reply} for c in complaints]
+        complaints = Complaint.objects.all().order_by('-id')
+        data = []
+        for c in complaints:
+            data.append({
+                "id": str(c.id),
+                "user_id": c.user_id,
+                "subject": c.subject,
+                "message": c.message,
+                "reply": c.reply,
+                "created_at": c.created_at.isoformat() if hasattr(c, 'created_at') and c.created_at else None,
+                "has_reply": bool(c.reply)
+            })
         return Response(data)
 
     def post(self, request):
         try:
-            complaint = Complaint.objects.get(id=request.data["complaint_id"])
+            from bson import ObjectId
+            complaint = Complaint.objects(id=ObjectId(request.data["complaint_id"])).first()
+            if not complaint:
+                return Response({"message": "Complaint not found"}, status=404)
+                
             complaint.reply = request.data["reply"]
-            complaint.save()
+            complaint.save()  # This will update the updated_at field
             return Response({"message": "Reply sent to user"})
-        except Complaint.DoesNotExist:
-            return Response({"message": "Complaint not found"}, status=404)
+        except Exception as e:
+            return Response({"message": "Invalid complaint ID or server error"}, status=400)
+
 
 #Admin analytics
 @authentication_classes([JWTAuthentication])

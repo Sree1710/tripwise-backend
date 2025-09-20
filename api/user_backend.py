@@ -160,7 +160,7 @@ class RegisterUser(APIView):
                     contact_number=contact_number,
                     profile_image_id=str(profile_image_id) if profile_image_id else None,  # ✅ consistent field
                     gender=gender,
-                    is_approved=False
+                    is_approved=True
                 )
                 profile.save()
 
@@ -208,16 +208,15 @@ class LoginView(APIView):
         user = authenticate(username=username, password=password)
         if user:
             profile = UserProfile.objects(user_id=str(user.id)).first()
-            if profile and profile.is_approved:
-                payload = {
+            payload = {
                     "user_id": str(user.id),
                     "username": username,
                     "role": "user",
                     "exp": datetime.now(timezone.utc) + timedelta(seconds=settings.JWT_EXP_DELTA)
                 }
-                token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+            token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
-                return Response({
+            return Response({
                     "message": "Login successful",
                     "role": "user",
                     "token": token,
@@ -233,7 +232,7 @@ class LoginView(APIView):
                         "profile_image_id": profile.profile_image_id
                     }
                 })
-            return Response({"error": "Account Not Approved Yet. Kindly Contact Admin."}, status=403)
+            
 
         return Response({"error": "Invalid Credentials."}, status=401)
 
@@ -260,7 +259,6 @@ class PastTrips(APIView):
 
 
 
-#Suggest Destination
 #Suggest Destination
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsUser])
@@ -315,6 +313,29 @@ class SubmitComplaint(APIView):
         )
         complaint.save()
         return Response({"message": "Complaint submitted"}, status=201)
+    
+
+#View All Complaints By User
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
+class UserComplaints(APIView):
+    def get(self, request):
+        user_id = request.user.id
+        complaints = Complaint.objects(user_id=str(user_id)).order_by('-id')  # MongoDB syntax
+        
+        complaints_data = []
+        for complaint in complaints:
+            complaints_data.append({
+                'id': str(complaint.id),  # MongoDB ObjectId to string
+                'subject': complaint.subject,
+                'message': complaint.message,
+                'admin_reply': complaint.reply,  # Map reply field to admin_reply
+                'created_at': complaint.created_at.isoformat() if hasattr(complaint, 'created_at') and complaint.created_at else None,
+                'reply_date': complaint.updated_at.isoformat() if hasattr(complaint, 'updated_at') and complaint.reply and complaint.updated_at else None,
+            })
+        
+        return Response({'complaints': complaints_data}, status=200)
+
 
 #Review Trip
 @authentication_classes([JWTAuthentication])
