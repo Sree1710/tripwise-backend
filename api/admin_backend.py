@@ -106,20 +106,6 @@ class AdminUserView(APIView):
 
         return Response(data)
 
-    
-
-# Approve users after registration (only for admin)
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAdmin])
-class ApproveUserView(APIView):
-    def post(self, request):
-        try:
-            user = UserProfile.objects.get(id=request.data["user_id"]) 
-            user.is_approved = True 
-            user.save() 
-            return Response({"message": "User approved"}) 
-        except UserProfile.DoesNotExist: 
-            return Response({"message": "User not found"}, status=404)
 
 
 

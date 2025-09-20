@@ -160,7 +160,7 @@ class RegisterUser(APIView):
                     contact_number=contact_number,
                     profile_image_id=str(profile_image_id) if profile_image_id else None,  # ✅ consistent field
                     gender=gender,
-                    is_approved=False
+                    is_approved=True
                 )
                 profile.save()
 
@@ -208,16 +208,15 @@ class LoginView(APIView):
         user = authenticate(username=username, password=password)
         if user:
             profile = UserProfile.objects(user_id=str(user.id)).first()
-            if profile and profile.is_approved:
-                payload = {
+            payload = {
                     "user_id": str(user.id),
                     "username": username,
                     "role": "user",
                     "exp": datetime.now(timezone.utc) + timedelta(seconds=settings.JWT_EXP_DELTA)
                 }
-                token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+            token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
-                return Response({
+            return Response({
                     "message": "Login successful",
                     "role": "user",
                     "token": token,
@@ -233,7 +232,7 @@ class LoginView(APIView):
                         "profile_image_id": profile.profile_image_id
                     }
                 })
-            return Response({"error": "Account Not Approved Yet. Kindly Contact Admin."}, status=403)
+            
 
         return Response({"error": "Invalid Credentials."}, status=401)
 
