@@ -32,4 +32,6 @@ urlpatterns = [
     path("export-itinerary-pdf/", ExportPDFView.as_view(), name="export-pdf"),
     path("profile-picture/", ProfilePictureView.as_view(), name="profile-picture"),
     path("user/viewcomplaints/", UserComplaints.as_view()),
+    path("user/viewreviews/", MyReviews.as_view()),
+    path("user/viewunreviewedtrips/", UnreviewedTrips.as_view()),
 ]
