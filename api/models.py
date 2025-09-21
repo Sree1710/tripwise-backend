@@ -85,7 +85,13 @@ class TripReview(Document):
     trip_id = StringField()
     rating = FloatField()
     review = StringField()
+    origin = StringField()  # New field
+    destination = StringField()  # New field
+    start_date = DateTimeField()  # New field
+    end_date = DateTimeField()  # New field
+    created_at = DateTimeField(default=datetime.utcnow)
     meta = {'collection': 'trip_review'}
+
 
 class PointOfInterest(Document):
     name = StringField(required=True)

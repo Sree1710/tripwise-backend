@@ -347,10 +347,85 @@ class ReviewTrip(APIView):
             user_id=data["user_id"],
             trip_id=data["trip_id"],
             rating=float(data["rating"]),
-            review=data["review"]
+            review=data["review"],
+            origin=data.get("origin", ""),  # New field with default
+            destination=data.get("destination", ""),  # New field with default
+            start_date=datetime.strptime(data["start_date"], "%Y-%m-%d") if data.get("start_date") else None,  # New field
+            end_date=datetime.strptime(data["end_date"], "%Y-%m-%d") if data.get("end_date") else None  # New field
         )
         review.save()
         return Response({"message": "Review submitted"}, status=201)
+
+
+
+#View All Reviews By User
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
+class MyReviews(APIView):
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        reviews = TripReview.objects.filter(user_id=user_id).order_by('-id')
+        print(f"📝 Review data: {reviews}")
+        
+        review_data = [
+            {
+                'trip_id': review.trip_id,
+                'rating': review.rating,
+                'review': review.review,
+                'origin': getattr(review, 'origin', ''),
+                'destination': getattr(review, 'destination', ''),
+                'start_date': getattr(review, 'start_date', None).isoformat() if getattr(review, 'start_date', None) else '',
+                'end_date': getattr(review, 'end_date', None).isoformat() if getattr(review, 'end_date', None) else '',
+                'created_at': review.created_at
+            }
+            for review in reviews
+        ]
+        
+        return Response({"reviews": review_data}, status=200)
+
+
+
+
+
+#View Unreviewed Trips By User
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsUser])
+class UnreviewedTrips(APIView):
+    def post(self, request):
+        user_id = str(request.data.get("user_id"))  # ensure it's a string
+        try:
+            # Get all trips for this user
+            trips = list(db.user_itineraries.find({"user_id": user_id}))
+            print(f"📝 Total trips for user {user_id}: {len(trips)}")
+
+            # Get all reviewed trip IDs for this user
+            reviewed_trips = TripReview.objects.filter(user_id=user_id).only("trip_id")
+            reviewed_trip_ids = set(str(r.trip_id) for r in reviewed_trips)
+            print(f"📝 Reviewed trip IDs: {reviewed_trip_ids}")
+
+            # Filter trips that are not reviewed
+            unreviewed_trips = []
+            for trip in trips:
+                trip_id_str = str(trip["_id"])  # ObjectId -> string
+                if trip_id_str not in reviewed_trip_ids:
+                    trip["_id"] = trip_id_str  # convert _id to string for API
+                    unreviewed_trips.append(trip)
+
+            print(f"📝 Unreviewed trips count: {len(unreviewed_trips)}")
+            return Response({"trips": unreviewed_trips}, status=200)
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=500)
+
+
+
+
+
+
+
+
 
 # Dashboard Stats
 @authentication_classes([JWTAuthentication])
@@ -371,7 +446,7 @@ class DashboardStats(APIView):
         # Compute average proposed_budget
         if total_trips > 0:
             avg_budget = sum(
-                t.itinerary_data["summary"]["proposed_budget"] for t in trips
+                t.itinerary_data["summary"]["actual_cost"] for t in trips
             ) / total_trips
         else:
             avg_budget = 0
