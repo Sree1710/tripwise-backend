@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from api.models import (
     Destination, EmergencyInfo, MetadataTag,
-    UserProfile, Complaint, UserItinerary, DestinationSuggestion
+    UserProfile, Complaint, UserItinerary, DestinationSuggestion, PointOfInterest
 )
 from rest_framework.decorators import authentication_classes, permission_classes
 from api.auth import JWTAuthentication
@@ -21,26 +21,62 @@ from datetime import datetime, timedelta
 @permission_classes([IsAdmin])
 class DestinationAdminView(ViewSet):
     def list(self, request):
-        destinations = Destination.objects.all()
-        data = [{"id": str(dest.id), "name": dest.name, "approved": dest.approved} for dest in destinations]
+        destinations = DestinationSuggestion.objects.all()
+        data = [
+            {
+                "id": str(dest.id),
+                "user_id": dest.user_id,
+                "name": dest.name,
+                "destination": dest.destination,
+                "avg_time": dest.avg_time,
+                "estimated_cost": dest.estimated_cost,
+                "tags": dest.tags,
+                "type": dest.type,
+                "location": dest.location.to_mongo() if dest.location else None,
+                "approved": getattr(dest, "approved", False)
+            }
+            for dest in destinations
+        ]
         return Response(data)
 
     def update(self, request, pk=None):
         try:
-            destination = Destination.objects.get(id=pk)
-            destination.approved = request.data.get("approved", destination.approved)
+            destination = DestinationSuggestion.objects.get(id=pk)
+            approved_status = request.data.get("approved")
+
+            if approved_status is None:
+                return Response({"error": "approved field is required"}, status=400)
+
+            destination.approved = bool(approved_status)
             destination.save()
+
+            # ✅ If approved, insert into PointOfInterest
+            if destination.approved:
+                poi = PointOfInterest(
+                    name=destination.name,
+                    destination=destination.destination,
+                    type=destination.type or "sightseeing",
+                    location=f"{destination.location.lat},{destination.location.lng}" if destination.location else "0.0,0.0",
+                    avg_time=destination.avg_time,
+                    estimated_cost=destination.estimated_cost,
+                    tags=destination.tags,
+                    hidden=False
+                )
+                poi.save()
+
             return Response({"message": "Destination status updated"})
-        except Destination.DoesNotExist:
+
+        except DestinationSuggestion.DoesNotExist:
             return Response({"message": "Destination not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def destroy(self, request, pk=None):
         try:
-            destination = Destination.objects.get(id=pk)
+            destination = DestinationSuggestion.objects.get(id=pk)
             destination.delete()
             return Response({"message": "Destination deleted"})
-        except Destination.DoesNotExist:
+        except DestinationSuggestion.DoesNotExist:
             return Response({"message": "Destination not found"}, status=status.HTTP_404_NOT_FOUND)
+
 
 
 
@@ -189,36 +225,105 @@ class AdminAnalyticsView(APIView):
             "top_users_by_trips": top_users_by_trips
         })
 
-# Approve or reject user-suggested destinations
+
+
+# Hidden/Unpopular Spots Management
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAdmin])
-class DestinationSuggestionAdminView(ViewSet):
+class HiddenSpotsAdminView(ViewSet):
+
+    def _is_hidden(self, spot):
+        """Determine if a spot should be considered hidden."""
+        return (
+            "hidden" in (spot.tags or []) or
+            "offbeat" in (spot.tags or []) or
+            "secret" in (spot.name.lower() if spot.name else "")
+        )
+
     def list(self, request):
-        suggestions = DestinationSuggestion.objects.all()
-        data = [{"id": str(s.id), "name": s.name, "description": s.description, "coordinates": s.coordinates} for s in suggestions]
+        all_spots = PointOfInterest.objects.all()
+        hidden_spots = [spot for spot in all_spots if self._is_hidden(spot)]
+
+        data = [
+            {
+                "id": str(spot.id),
+                "name": spot.name,
+                "destination": spot.destination,
+                "type": spot.type,
+                "location": {
+                    "lat": spot.location.get("lat", 0.0) if isinstance(spot.location, dict) else 0.0,
+                    "lng": spot.location.get("lng", 0.0) if isinstance(spot.location, dict) else 0.0,
+                },
+                "avg_time": float(spot.avg_time) if spot.avg_time else 0.0,
+                "estimated_cost": float(spot.estimated_cost) if spot.estimated_cost else 0.0,
+                "tags": spot.tags or [],
+                "hidden": True
+            }
+            for spot in hidden_spots
+        ]
         return Response(data)
 
-    def approve(self, request, pk=None):
+    def retrieve(self, request, pk=None):
         try:
-            suggestion = DestinationSuggestion.objects.get(id=pk)
-            # Create Destination
-            dest = Destination(
-                name=suggestion.name,
-                description=suggestion.description,
-                coordinates=suggestion.coordinates,
-                approved=True
-            )
-            dest.save()
-            suggestion.delete()
-            return Response({"message": "Destination approved and added to main list"})
-        except DestinationSuggestion.DoesNotExist:
-            return Response({"message": "Suggestion not found"}, status=404)
+            spot = PointOfInterest.objects.get(id=pk)
+            if not self._is_hidden(spot):
+                return Response({"message": "Hidden spot not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            data = {
+                "id": str(spot.id),
+                "name": spot.name,
+                "destination": spot.destination,
+                "type": spot.type,
+                "location": {
+                    "lat": spot.location.get("lat", 0.0) if isinstance(spot.location, dict) else 0.0,
+                    "lng": spot.location.get("lng", 0.0) if isinstance(spot.location, dict) else 0.0,
+                },
+                "avg_time": float(spot.avg_time) if spot.avg_time else 0.0,
+                "estimated_cost": float(spot.estimated_cost) if spot.estimated_cost else 0.0,
+                "tags": spot.tags or [],
+                "hidden": True
+            }
+            return Response(data)
+        except PointOfInterest.DoesNotExist:
+            return Response({"message": "Hidden spot not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    def update(self, request, pk=None):
+        try:
+            spot = PointOfInterest.objects.get(id=pk)
+            data = request.data
+
+            if "name" in data:
+                spot.name = data["name"]
+            if "destination" in data:
+                spot.destination = data["destination"]
+            if "type" in data:
+                spot.type = data["type"]
+            if "location" in data:
+                # Expecting {"lat": 10.2, "lng": 77.0}
+                loc = data["location"]
+                if isinstance(loc, dict):
+                    spot.location = {"lat": loc.get("lat", 0.0), "lng": loc.get("lng", 0.0)}
+            if "avg_time" in data:
+                spot.avg_time = data["avg_time"]
+            if "estimated_cost" in data:
+                spot.estimated_cost = data["estimated_cost"]
+            if "tags" in data:
+                spot.tags = data["tags"]
+
+            spot.save()
+            return Response({"message": "Hidden spot updated"})
+        except PointOfInterest.DoesNotExist:
+            return Response({"message": "Hidden spot not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def destroy(self, request, pk=None):
         try:
-            suggestion = DestinationSuggestion.objects.get(id=pk)
-            suggestion.delete()
-            return Response({"message": "Suggestion deleted"})
-        except DestinationSuggestion.DoesNotExist:
-            return Response({"message": "Suggestion not found"}, status=404)
+            spot = PointOfInterest.objects.get(id=pk)
+            if not self._is_hidden(spot):
+                return Response({"message": "Hidden spot not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            spot.delete()
+            return Response({"message": "Hidden spot deleted"})
+        except PointOfInterest.DoesNotExist:
+            return Response({"message": "Hidden spot not found"}, status=status.HTTP_404_NOT_FOUND)
+
 

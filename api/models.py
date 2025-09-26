@@ -61,6 +61,7 @@ class DestinationSuggestion(Document):
     tags = ListField(StringField())
     type = StringField()
     location = EmbeddedDocumentField(Location)   # instead of coordinates string
+    approved = BooleanField(default=False)       # <-- NEW field for admin approval
 
     meta = {'collection': 'destination_suggestion'}
 

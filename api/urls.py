@@ -17,7 +17,14 @@ urlpatterns = [
     path("admin/users/", AdminUserView.as_view()), # View all users
     path("admin/complaints/", AdminComplaintView.as_view()),
     path("admin/analytics/", AdminAnalyticsView.as_view()),
-    path("admin/suggestions/", DestinationSuggestionAdminView.as_view({"get": "list", "delete": "destroy"})),
+    path(
+        "admin/hidden-spots/",
+        HiddenSpotsAdminView.as_view({"get": "list"})
+    ),
+    path(
+        "admin/hidden-spots/<str:pk>/",
+        HiddenSpotsAdminView.as_view({"get": "retrieve", "put": "update", "delete": "destroy"})
+    ),
     # Admin fetches any user's picture by id
     path("user/<str:user_id>/profile-picture/", UserProfilePictureView.as_view(), name="user-profile-picture"),
 
