@@ -165,10 +165,10 @@ def allocate_budget_realistically(budget, duration):
         }
     else:
         return {
-            'accommodation': budget * 0.45,
-            'activities': budget * 0.3,
-            'meals': budget * 0.25,
-            'max_hotel_budget': budget * 0.5
+            'accommodation': budget * 0.35,
+            'activities': budget * 0.35,
+            'meals': budget * 0.3,
+            'max_hotel_budget': budget * 0.4
         }
 
 def select_budget_appropriate_hotel(hotels, budget_allocation, duration):
