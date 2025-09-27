@@ -37,10 +37,8 @@ def get_hidden_spots(destination, interests):
             # Enhanced criteria for "hidden" spots
             is_hidden = (
                 "hidden" in spot.tags or 
-                "secret" in spot.name.lower() or 
-                "offbeat" in spot.tags or
-                spot.estimated_cost < 200 or
-                getattr(spot, 'popularity_score', 0) < 3.0
+                "secret" in spot.tags or 
+                "offbeat" in spot.tags
             )
             
             # Check if spot matches user interests

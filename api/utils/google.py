@@ -1,15 +1,18 @@
+# import json
 import requests
+import time
 from django.conf import settings
-from urllib.parse import urlencode
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 
-class GoogleAPIError(Exception):
+class GeocodeError(Exception):
     pass
 
 
 def get_route_info(origin, destination):
     """
-    Get route information using Google Directions API or mock data.
+    Get route information using OSRM (Open Source Routing Machine) or mock data.
     """
     if getattr(settings, "MOCK_API", False):
         return {
@@ -20,88 +23,70 @@ def get_route_info(origin, destination):
         }
 
     try:
-        api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', None)
-        if not api_key:
-            raise GoogleAPIError("Google Maps API key not configured")
-
-        # Google Directions API
-        base_url = "https://maps.googleapis.com/maps/api/directions/json"
-        params = {
-            'origin': origin,
-            'destination': destination,
-            'key': api_key,
-            'mode': 'driving',
-            'units': 'metric',
-            'region': 'in'  # Bias results towards India
-        }
+        # Get coordinates for both locations using OSM
+        origin_coords = get_destination_coordinates(origin)
+        dest_coords = get_destination_coordinates(destination)
         
-        response = requests.get(base_url, params=params, timeout=10)
-        response.raise_for_status()
+        # OSRM API (free, open source routing)
+        osrm_url = "http://router.project-osrm.org/route/v1/driving"
+        coords = f"{origin_coords['lng']},{origin_coords['lat']};{dest_coords['lng']},{dest_coords['lat']}"
         
-        data = response.json()
+        response = requests.get(f"{osrm_url}/{coords}?overview=false", timeout=15)
         
-        if data['status'] != 'OK' or not data['routes']:
-            raise GoogleAPIError(f"No routes found: {data.get('status', 'Unknown error')}")
+        if response.status_code == 200:
+            data = response.json()
+            
+            if data['code'] == 'Ok' and data['routes']:
+                route = data['routes'][0]
+                
+                return {
+                    "origin": origin,
+                    "destination": destination,
+                    "distance_km": round(route['distance'] / 1000, 2),
+                    "duration_hours": round(route['duration'] / 3600, 2)
+                }
         
-        route = data['routes'][0]['legs'][0]
-        
-        return {
-            "origin": origin,
-            "destination": destination,
-            "distance_km": round(route['distance']['value'] / 1000, 2),
-            "duration_hours": round(route['duration']['value'] / 3600, 2)
-        }
-        
-    except (requests.RequestException, KeyError, GoogleAPIError) as e:
-        print(f"Google Directions API error: {e}")
-        # Fallback to mock data on error
-        return {
-            "origin": origin,
-            "destination": destination,
-            "distance_km": 150,
-            "duration_hours": 5.0
-        }
+    except Exception as e:
+        print(f"OSRM routing error: {e}")
+    
+    # Fallback to mock data on error
+    return {
+        "origin": origin,
+        "destination": destination,
+        "distance_km": 150,
+        "duration_hours": 5.0
+    }
 
 
 def get_places(destination, interests):
     """
-    Get places using Google Places API or mock data.
+    Get places using OpenStreetMap Overpass API or mock data.
     """
     if getattr(settings, "MOCK_API", False):
         return get_mock_places(destination, interests)
 
     try:
-        api_key = getattr(settings, 'GOOGLE_MAPS_API_KEY', None)
-        if not api_key:
-            raise GoogleAPIError("Google Maps API key not configured")
-
+        # Get destination coordinates first
+        coords = get_destination_coordinates(destination)
+        
         all_places = []
         
-        # Search for different types of places
-        place_types = {
-            'nature': ['park', 'natural_feature', 'zoo'],
-            'heritage': ['museum', 'tourist_attraction', 'place_of_worship'],
-            'adventure': ['amusement_park', 'tourist_attraction'],
-            'beach': ['natural_feature', 'tourist_attraction'],
-            'culture': ['museum', 'art_gallery', 'tourist_attraction'],
-            'food': ['restaurant', 'cafe', 'meal_takeaway'],
-            'hotel': ['lodging'],
-            'restaurant': ['restaurant', 'food', 'cafe']
+        # Define OpenStreetMap tags for different interests
+        osm_tags = {
+            'nature': ['leisure=park', 'natural=*', 'tourism=zoo'],
+            'heritage': ['tourism=museum', 'tourism=attraction', 'amenity=place_of_worship'],
+            'adventure': ['tourism=theme_park', 'leisure=water_park'],
+            'beach': ['natural=beach', 'leisure=beach_resort'],
+            'culture': ['tourism=museum', 'tourism=gallery'],
+            'food': ['amenity=restaurant', 'amenity=cafe'],
+            'hotel': ['tourism=hotel', 'tourism=guest_house'],
+            'restaurant': ['amenity=restaurant', 'amenity=fast_food', 'amenity=cafe']
         }
         
-        # Get coordinates for the destination first
-        destination_coords = get_destination_coordinates(destination, api_key)
-        
         for interest in interests + ['hotel', 'restaurant']:
-            search_types = place_types.get(interest, ['tourist_attraction'])
-            
-            for place_type in search_types:
-                places = search_places_by_type(destination, destination_coords, place_type, api_key)
-                
-                for place in places:
-                    place['type'] = map_place_type_to_interest(place_type, interest)
-                    place['destination'] = destination
-                    all_places.append(place)
+            if interest in osm_tags:
+                interest_places = search_overpass_api(coords, osm_tags[interest], destination, interest)
+                all_places.extend(interest_places)
         
         # Remove duplicates and limit results
         seen_names = set()
@@ -114,32 +99,35 @@ def get_places(destination, interests):
         return unique_places[:20]  # Limit to 20 places
         
     except Exception as e:
-        print(f"Google Places API error: {e}")
+        print(f"OSM Places API error: {e}")
         # Fallback to mock data instead of empty list
         return get_mock_places(destination, interests)
 
 
-def get_destination_coordinates(destination, api_key):
-    """Get latitude and longitude for a destination with fallbacks."""
+def get_destination_coordinates(destination, api_key=None):
+    """Get latitude and longitude for a destination using OpenStreetMap Nominatim."""
     try:
-        base_url = "https://maps.googleapis.com/maps/api/geocoding/json"
-        params = {
-            'address': destination + ", India",  # Better for Indian locations
-            'key': api_key,
-            'region': 'in'  # Bias towards India
-        }
+        # Initialize Nominatim with a unique user agent (required by Nominatim)
+        geolocator = Nominatim(user_agent="travel_booking_app_kerala_v1")
         
-        response = requests.get(base_url, params=params, timeout=10)
-        data = response.json()
+        # Add India bias for better results
+        location = geolocator.geocode(f"{destination}, India", timeout=10)
         
-        if data['status'] == 'OK' and data['results']:
-            location = data['results'][0]['geometry']['location']
-            return {"lat": location['lat'], "lng": location['lng']}
-        
+        if location:
+            print(f"Successfully geocoded {destination}: {location.latitude}, {location.longitude}")
+            return {
+                "lat": location.latitude, 
+                "lng": location.longitude
+            }
+        else:
+            print(f"No results found for {destination} using Nominatim")
+            
+    except (GeocoderTimedOut, GeocoderServiceError) as e:
+        print(f"Nominatim geocoding error: {e}")
     except Exception as e:
-        print(f"Geocoding error: {e}")
+        print(f"Unexpected geocoding error: {e}")
     
-    # Fallback coordinates for major Indian destinations
+    # Fallback coordinates for major Indian destinations (unchanged)
     default_coords = {
         'mumbai': {"lat": 19.0760, "lng": 72.8777},
         'delhi': {"lat": 28.7041, "lng": 77.1025},
@@ -166,63 +154,144 @@ def get_destination_coordinates(destination, api_key):
     return {"lat": 9.9312, "lng": 76.2673}
 
 
-def search_places_by_type(destination, coords, place_type, api_key):
-    """Search for places of a specific type near destination."""
+def search_overpass_api(coords, tags, destination, interest_type):
+    """Search OpenStreetMap using Overpass API for places."""
+    places = []
+    
     try:
-        base_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-        params = {
-            'location': f"{coords['lat']},{coords['lng']}",
-            'radius': 25000,  # 25km radius
-            'type': place_type,
-            'key': api_key
-        }
+        # Overpass API endpoint
+        overpass_url = "http://overpass-api.de/api/interpreter"
         
-        response = requests.get(base_url, params=params, timeout=10)
-        data = response.json()
-        
-        places = []
-        if data['status'] == 'OK':
-            for place in data.get('results', [])[:5]:  # Limit to 5 per type
-                # Skip places with very low ratings
-                if place.get('rating', 0) < 3.0 and place.get('user_ratings_total', 0) > 10:
-                    continue
-                    
-                # Estimate cost and time based on place type and rating
-                estimated_cost = estimate_place_cost(place, place_type)
-                avg_time = estimate_visit_time(place_type)
+        # Build query for each tag (limit to avoid timeout)
+        for tag in tags[:2]:  # Limit to 2 tags per interest
+            # Search within 25km radius
+            query = f"""
+            [out:json][timeout:25];
+            (
+              node[{tag}](around:25000,{coords['lat']},{coords['lng']});
+              way[{tag}](around:25000,{coords['lat']},{coords['lng']});
+              relation[{tag}](around:25000,{coords['lat']},{coords['lng']});
+            );
+            out center meta;
+            """
+            
+            response = requests.post(overpass_url, data=query, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
                 
-                place_data = {
-                    'name': place['name'],
-                    'location': {
-                        'lat': place['geometry']['location']['lat'],
-                        'lng': place['geometry']['location']['lng']
-                    },
-                    'avg_time': avg_time,
-                    'estimated_cost': estimated_cost,
-                    'rating': place.get('rating', 0),
-                    'place_id': place['place_id'],
-                    'price_level': place.get('price_level', 2),
-                    'user_ratings_total': place.get('user_ratings_total', 0)
-                }
-                
-                # Add additional details if available
-                if 'photos' in place:
-                    place_data['has_photos'] = True
-                
-                if 'opening_hours' in place:
-                    place_data['is_open'] = place['opening_hours'].get('open_now', True)
-                
-                places.append(place_data)
-        
-        return places
-        
+                for element in data.get('elements', [])[:5]:  # Limit to 5 per tag
+                    if 'tags' in element and 'name' in element['tags']:
+                        # Get coordinates
+                        if element['type'] == 'node':
+                            lat, lng = element['lat'], element['lon']
+                        elif 'center' in element:
+                            lat, lng = element['center']['lat'], element['center']['lon']
+                        else:
+                            continue
+                        
+                        place = {
+                            'name': element['tags']['name'],
+                            'location': {'lat': lat, 'lng': lng},
+                            'avg_time': estimate_visit_time_from_osm_tag(tag),
+                            'estimated_cost': estimate_cost_from_osm_tag(tag),
+                            'type': interest_type,
+                            'destination': destination,
+                            'rating': 4.0,  # Default rating for OSM places
+                            'place_id': f"osm_{element['type']}_{element['id']}",
+                            'price_level': 2,
+                            'user_ratings_total': 100  # Default value
+                        }
+                        
+                        # Add additional OSM-specific data if available
+                        if 'website' in element['tags']:
+                            place['has_website'] = True
+                        if 'phone' in element['tags']:
+                            place['has_phone'] = True
+                            
+                        places.append(place)
+            
+            # Respect Overpass API rate limits
+            time.sleep(1)
+            
     except Exception as e:
-        print(f"Places search error: {e}")
-        return []
+        print(f"Overpass API error for {interest_type}: {e}")
+    
+    return places
+
+
+def estimate_visit_time_from_osm_tag(tag):
+    """Estimate visit time based on OSM tag."""
+    time_mapping = {
+        'tourism=museum': 2,
+        'leisure=park': 3,
+        'tourism=zoo': 4,
+        'amenity=restaurant': 1,
+        'amenity=cafe': 0.5,
+        'tourism=hotel': 0,
+        'tourism=guest_house': 0,
+        'natural=beach': 3,
+        'tourism=attraction': 2.5,
+        'amenity=place_of_worship': 1,
+        'tourism=theme_park': 5,
+        'tourism=gallery': 1.5
+    }
+    
+    # Handle wildcard matches
+    if tag.startswith('natural='):
+        return 2.5
+    
+    return time_mapping.get(tag, 2)
+
+
+def estimate_cost_from_osm_tag(tag):
+    """Estimate cost based on OSM tag (2025 rates)."""
+    cost_mapping = {
+        'tourism=museum': 150,
+        'leisure=park': 50,
+        'tourism=zoo': 300,
+        'amenity=restaurant': 500,
+        'amenity=cafe': 300,
+        'amenity=fast_food': 250,
+        'tourism=hotel': 2500,
+        'tourism=guest_house': 1500,
+        'natural=beach': 0,
+        'tourism=attraction': 200,
+        'amenity=place_of_worship': 0,
+        'tourism=theme_park': 800,
+        'tourism=gallery': 100
+    }
+    
+    # Handle wildcard matches
+    if tag.startswith('natural='):
+        return 50  # Most natural features are free or low cost
+    
+    return cost_mapping.get(tag, 100)
+
+
+def search_places_by_type(destination, coords, place_type, api_key):
+    """Legacy function - now redirects to OSM-based search."""
+    # Map old Google place types to OSM tags
+    google_to_osm = {
+        'park': ['leisure=park'],
+        'natural_feature': ['natural=*'],
+        'zoo': ['tourism=zoo'],
+        'museum': ['tourism=museum'],
+        'tourist_attraction': ['tourism=attraction'],
+        'place_of_worship': ['amenity=place_of_worship'],
+        'restaurant': ['amenity=restaurant'],
+        'cafe': ['amenity=cafe'],
+        'lodging': ['tourism=hotel'],
+        'art_gallery': ['tourism=gallery'],
+        'amusement_park': ['tourism=theme_park']
+    }
+    
+    tags = google_to_osm.get(place_type, ['tourism=attraction'])
+    return search_overpass_api(coords, tags, destination, place_type)
 
 
 def map_place_type_to_interest(place_type, interest):
-    """Map Google place type back to our interest categories."""
+    """Map place type back to our interest categories (unchanged)."""
     type_mapping = {
         'lodging': 'hotel',
         'restaurant': 'restaurant',
@@ -242,7 +311,7 @@ def map_place_type_to_interest(place_type, interest):
 
 
 def estimate_place_cost(place, place_type):
-    """Enhanced cost estimation with price_level and rating."""
+    """Enhanced cost estimation (unchanged for compatibility)."""
     # Base costs in INR (updated for 2025 rates)
     base_costs = {
         'lodging': 2500,
@@ -262,7 +331,7 @@ def estimate_place_cost(place, place_type):
     
     base_cost = base_costs.get(place_type, 100)
     
-    # Use Google's price_level if available (0-4 scale)
+    # Use price_level if available (0-4 scale)
     price_level = place.get('price_level', 2)  # Default to moderate
     price_multipliers = {0: 0.5, 1: 0.7, 2: 1.0, 3: 1.5, 4: 2.0}
     price_multiplier = price_multipliers.get(price_level, 1.0)
@@ -281,7 +350,7 @@ def estimate_place_cost(place, place_type):
 
 
 def estimate_visit_time(place_type):
-    """Estimate average visit time based on place type."""
+    """Estimate average visit time based on place type (unchanged)."""
     time_estimates = {
         'lodging': 0,           # Accommodation, not visit time
         'restaurant': 1,        # 1 hour for meal
@@ -301,21 +370,18 @@ def estimate_visit_time(place_type):
     return time_estimates.get(place_type, 2)
 
 
-def get_place_details(place_id, api_key):
-    """Get detailed information about a specific place."""
+def get_place_details(place_id, api_key=None):
+    """Get detailed information about a specific place - OSM version."""
     try:
-        base_url = "https://maps.googleapis.com/maps/api/place/details/json"
-        params = {
-            'place_id': place_id,
-            'key': api_key,
-            'fields': 'name,formatted_address,formatted_phone_number,website,opening_hours,price_level,rating,reviews,photos'
-        }
-        
-        response = requests.get(base_url, params=params, timeout=10)
-        data = response.json()
-        
-        if data['status'] == 'OK':
-            return data['result']
+        if place_id.startswith('osm_'):
+            # For OSM places, we have limited detail capability
+            # Could integrate with additional OSM services if needed
+            return {
+                'name': 'OSM Place',
+                'formatted_address': 'Address from OpenStreetMap',
+                'rating': 4.0,
+                'source': 'OpenStreetMap'
+            }
             
     except Exception as e:
         print(f"Place details error: {e}")
@@ -324,7 +390,7 @@ def get_place_details(place_id, api_key):
 
 
 def get_mock_places(destination, interests):
-    """Comprehensive mock data for testing and fallback."""
+    """Comprehensive mock data for testing and fallback (unchanged)."""
     sample_places = [
         # Munnar
         {
@@ -515,32 +581,25 @@ def get_mock_places(destination, interests):
     return filtered_places
 
 
-def search_text_places(query, api_key):
-    """Search places using text query (useful for specific searches)."""
+def search_text_places(query, api_key=None):
+    """Search places using Nominatim text search."""
     try:
-        base_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        params = {
-            'query': query,
-            'key': api_key,
-            'region': 'in'
-        }
-        
-        response = requests.get(base_url, params=params, timeout=10)
-        data = response.json()
+        geolocator = Nominatim(user_agent="travel_booking_app_kerala_v1")
+        locations = geolocator.geocode(query, exactly_one=False, limit=10, timeout=10)
         
         places = []
-        if data['status'] == 'OK':
-            for place in data.get('results', [])[:10]:  # Limit results
+        if locations:
+            for location in locations[:10]:
                 places.append({
-                    'name': place['name'],
+                    'name': location.address.split(',')[0],
                     'location': {
-                        'lat': place['geometry']['location']['lat'],
-                        'lng': place['geometry']['location']['lng']
+                        'lat': location.latitude,
+                        'lng': location.longitude
                     },
-                    'rating': place.get('rating', 0),
-                    'place_id': place['place_id'],
-                    'formatted_address': place.get('formatted_address', ''),
-                    'price_level': place.get('price_level', 2)
+                    'rating': 4.0,  # Default rating
+                    'place_id': f"osm_text_{hash(location.address)}",
+                    'formatted_address': location.address,
+                    'price_level': 2
                 })
         
         return places
